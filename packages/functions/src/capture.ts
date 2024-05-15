@@ -13,11 +13,32 @@ import {
 
 import { Table } from 'sst/node/table'
 
+type WebhookOrigin = 'bigcommerce' | 'stripe'
+
+/**
+ * Collection of functions that extract the id (PK) and created at (SK) from the
+ * webhook payload.
+ */
+type ExtractCompositeKeys = {
+  [key in WebhookOrigin]: (payload: any) => { PK: string; created_at: string }
+}
+
+/**
+ * Collection of mapper functions to transform webhooks from multiple providers
+ * to our DynamoDB schema
+ */
+type Mappers = {
+  [key in WebhookOrigin]: (payload: any) => any
+}
+
 const dynamoClient = new DynamoDBClient()
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
 /**
- * Handles the API Gateway event and captures the webhook payload.
+ * Lambda function entry point. Performs validation on the webhook before capturing
+ * it in DynamoDB.
+ *
+ * Processing will be handled by other Lambda functions via DynamoDB Streams.
  * @param event - The API Gateway event.
  * @returns The API Gateway response.
  */
@@ -42,6 +63,10 @@ export const handler: APIGatewayProxyHandlerV2 = async event => {
 
   const payload = JSON.parse(event.body)
 
+  // Note:
+  // We should add handle validation of the payload and verify sender here.
+  // But since this is a proof of concept, we'll skip that for now.
+
   const duplicateResult = await checkDuplicate(payload, origin)
 
   // early exit on duplicates or Dynamo errors
@@ -51,8 +76,6 @@ export const handler: APIGatewayProxyHandlerV2 = async event => {
 
   return capture(payload, origin)
 }
-
-type WebhookOrigin = 'bigcommerce' | 'stripe'
 
 /**
  * Determines the origin of the webhook based on the URI path.
@@ -76,7 +99,10 @@ function determineOrigin(rawPath: string): WebhookOrigin | 'INVALID_ORIGIN' {
  * @param origin - The origin of the webhook.
  * @returns null if the webhook is not a duplicate, otherwise an API Gateway response which signals an early exit.
  */
-const checkDuplicate = async (payload: any, origin: WebhookOrigin) => {
+const checkDuplicate = async (
+  payload: any,
+  origin: WebhookOrigin
+): Promise<APIGatewayProxyStructuredResultV2 | null> => {
   const getCommand = new GetCommand({
     TableName: Table.Webhooks.tableName,
     Key: extractCompositeKeys[origin](payload),
@@ -85,15 +111,9 @@ const checkDuplicate = async (payload: any, origin: WebhookOrigin) => {
   const [error, response] = await to(docClient.send(getCommand))
 
   if (error) {
-    let message
-    if (error instanceof Error) {
-      message = error.message
-    } else {
-      message = String(error)
-    }
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: message }),
+      body: JSON.stringify({ error: error.message }),
     }
   }
 
@@ -110,7 +130,6 @@ const checkDuplicate = async (payload: any, origin: WebhookOrigin) => {
 
 /**
  * Captures the webhook payload and saves it to DynamoDB.
- * This will trigger webhook processing Lambda functions via DynamoDB Streams.
  * @param payload - The webhook payload.
  * @param origin - The origin of the webhook.
  * @returns The API Gateway response.
@@ -127,15 +146,9 @@ const capture = async (
   const [error, response] = await to(docClient.send(putCommand))
 
   if (error) {
-    let message
-    if (error instanceof Error) {
-      message = error.message
-    } else {
-      message = String(error)
-    }
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: message }),
+      body: JSON.stringify({ error: error.message }),
     }
   }
 
@@ -143,22 +156,6 @@ const capture = async (
     statusCode: 200,
     body: JSON.stringify(response),
   }
-}
-
-/**
- * Collection of functions that extract the id (PK) and created at (SK) from the
- * webhook payload.
- */
-type ExtractCompositeKeys = {
-  [key in WebhookOrigin]: (payload: any) => { PK: string; created_at: string }
-}
-
-/**
- * Collection of mapper functions to transform webhooks from multiple providers
- * to our DynamoDB schema
- */
-type Mappers = {
-  [key in WebhookOrigin]: (payload: any) => any
 }
 
 const extractCompositeKeys: ExtractCompositeKeys = {
