@@ -4,15 +4,15 @@ export function StorageStack({ stack }: StackContext) {
   const table = new Table(stack, 'Webhooks', {
     fields: {
       PK: 'string',
-      created: 'string',
+      created_at: 'string',
       origin: 'string',
       event_type: 'string',
       status: 'string',
       payload: 'string',
     },
-    primaryIndex: { partitionKey: 'PK', sortKey: 'created' },
+    primaryIndex: { partitionKey: 'PK', sortKey: 'created_at' },
     globalIndexes: {
-      OriginIndex: { partitionKey: 'origin', sortKey: 'created' },
+      OriginIndex: { partitionKey: 'origin', sortKey: 'created_at' },
     },
   })
 
