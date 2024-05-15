@@ -1,5 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb'
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+} from '@aws-sdk/lib-dynamodb'
 import to from 'await-to-js'
 
 import {
@@ -12,6 +16,11 @@ import { Table } from 'sst/node/table'
 const dynamoClient = new DynamoDBClient()
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
+/**
+ * Handles the API Gateway event and captures the webhook payload.
+ * @param event - The API Gateway event.
+ * @returns The API Gateway response.
+ */
 export const handler: APIGatewayProxyHandlerV2 = async event => {
   if (!event.body) {
     return {
@@ -20,40 +29,102 @@ export const handler: APIGatewayProxyHandlerV2 = async event => {
     }
   }
 
-  switch ((event as any).rawPath) {
-    case '/webhooks/bigcommerce':
-      return capture(event.body, 'bigcommerce')
-    case '/webhooks/stripe':
-      return capture(event.body, 'stripe')
-    default:
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'Webhook not supported' }),
-      }
+  const origin = determineOrigin((event as any).rawPath)
+
+  if (origin === 'INVALID_ORIGIN') {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Webhook Not Supported: origin not supported',
+      }),
+    }
   }
+
+  const payload = JSON.parse(event.body)
+
+  const duplicateResult = await checkDuplicate(payload, origin)
+
+  // early exit on duplicates or Dynamo errors
+  if (duplicateResult !== null) {
+    return duplicateResult
+  }
+
+  return capture(payload, origin)
 }
 
 type WebhookOrigin = 'bigcommerce' | 'stripe'
 
 /**
+ * Determines the origin of the webhook based on the URI path.
+ * @param rawPath - The rawPath from the API Gateway event.
+ * @returns The webhook origin or 'INVALID_ORIGIN' if the rawPath is not recognized.
+ */
+function determineOrigin(rawPath: string): WebhookOrigin | 'INVALID_ORIGIN' {
+  switch (rawPath) {
+    case '/webhooks/bigcommerce':
+      return 'bigcommerce'
+    case '/webhooks/stripe':
+      return 'stripe'
+    default:
+      return 'INVALID_ORIGIN'
+  }
+}
+
+/**
+ * Checks if the webhook payload is a duplicate.
+ * @param payload - The webhook payload.
+ * @param origin - The origin of the webhook.
+ * @returns null if the webhook is not a duplicate, otherwise an API Gateway response which signals an early exit.
+ */
+const checkDuplicate = async (payload: any, origin: WebhookOrigin) => {
+  const getCommand = new GetCommand({
+    TableName: Table.Webhooks.tableName,
+    Key: extractCompositeKeys[origin](payload),
+  })
+
+  const [error, response] = await to(docClient.send(getCommand))
+
+  if (error) {
+    let message
+    if (error instanceof Error) {
+      message = error.message
+    } else {
+      message = String(error)
+    }
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: message }),
+    }
+  }
+
+  if (response.Item) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'duplicate webhook received' }),
+    }
+  }
+
+  // No matches / duplicate found
+  return null
+}
+
+/**
  * Captures the webhook payload and saves it to DynamoDB.
  * This will trigger webhook processing Lambda functions via DynamoDB Streams.
- * @param rawBody - Raw JSON webhook payload
- * @param origin - Origin of the webhook. e.g. 'bigcommerce' or 'stripe'
+ * @param payload - The webhook payload.
+ * @param origin - The origin of the webhook.
  * @returns The API Gateway response.
  */
 const capture = async (
-  rawBody: string,
+  payload: any,
   origin: WebhookOrigin
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const payload = JSON.parse(rawBody)
-
-  const command = new PutCommand({
+  const putCommand = new PutCommand({
     TableName: Table.Webhooks.tableName,
     Item: mappers[origin](payload),
   })
 
-  const [error, response] = await to(docClient.send(command))
+  const [error, response] = await to(docClient.send(putCommand))
 
   if (error) {
     let message
@@ -74,23 +145,46 @@ const capture = async (
   }
 }
 
-type Mappers = {
-  [key in WebhookOrigin]: (payload: any) => any
+/**
+ * Collection of functions that extract the id (PK) and created at (SK) from the
+ * webhook payload.
+ */
+type ExtractCompositeKeys = {
+  [key in WebhookOrigin]: (payload: any) => { PK: string; created_at: string }
 }
 
 /**
  * Collection of mapper functions to transform webhooks from multiple providers
  * to our DynamoDB schema
  */
+type Mappers = {
+  [key in WebhookOrigin]: (payload: any) => any
+}
+
+const extractCompositeKeys: ExtractCompositeKeys = {
+  bigcommerce: payload => ({
+    PK: payload.hash,
+    created_at: new Date(payload.created_at * 1000).toISOString(),
+  }),
+  stripe: payload => ({
+    PK: payload.id,
+    created_at: new Date(payload.created_at * 1000).toISOString(),
+  }),
+} as const
+
 const mappers: Mappers = {
   bigcommerce: bigcommerceWebhookMapper,
   stripe: stripeWebhookMapper,
 } as const
 
+/**
+ * Maps the BigCommerce webhook payload to the DynamoDB schema.
+ * @param payload - The BigCommerce webhook payload.
+ * @returns The mapped payload.
+ */
 function bigcommerceWebhookMapper(payload: any) {
   return {
-    PK: payload.hash,
-    created_at: new Date(payload.created_at * 1000).toISOString(),
+    ...extractCompositeKeys['bigcommerce'](payload),
     origin: 'bigcommerce',
     event_type: payload.scope,
     status: 'received',
@@ -98,10 +192,14 @@ function bigcommerceWebhookMapper(payload: any) {
   }
 }
 
+/**
+ * Maps the Stripe webhook payload to the DynamoDB schema.
+ * @param payload - The Stripe webhook payload.
+ * @returns The mapped payload.
+ */
 function stripeWebhookMapper(payload: any) {
   return {
-    PK: payload.id,
-    created: new Date(payload.created_at * 1000).toISOString(),
+    ...extractCompositeKeys['stripe'](payload),
     origin: 'stripe',
     event_type: payload.type,
     status: 'received',
