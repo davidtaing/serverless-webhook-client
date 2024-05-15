@@ -14,6 +14,13 @@ export function StorageStack({ stack }: StackContext) {
     globalIndexes: {
       OriginIndex: { partitionKey: 'origin', sortKey: 'created_at' },
     },
+    stream: 'keys_only',
+    consumers: {
+      process: {
+        function: 'packages/functions/src/process.handler',
+        filters: [{ eventName: ['INSERT'] }],
+      },
+    },
   })
 
   return {
