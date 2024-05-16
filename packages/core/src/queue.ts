@@ -1,4 +1,6 @@
 import {
+  DeleteMessageBatchCommand,
+  DeleteMessageBatchCommandInput,
   SendMessageCommand,
   SendMessageCommandInput,
   SendMessageCommandOutput,
@@ -7,13 +9,14 @@ import {
 import to from 'await-to-js'
 import { Queue } from 'sst/node/queue'
 
+const QueueUrl = Queue.FailedWebhooksQueue.queueUrl
 export const sqs = new SQSClient()
 
 export async function sendSQSMessage(
   options: Omit<SendMessageCommandInput, 'QueueUrl'>
 ): Promise<{ error: Error | null; sendResult?: SendMessageCommandOutput }> {
   const input: SendMessageCommandInput = {
-    QueueUrl: Queue.FailedWebhooksQueue.queueUrl,
+    QueueUrl,
     MessageBody: options.MessageBody,
     MessageAttributes: options.MessageAttributes,
   }

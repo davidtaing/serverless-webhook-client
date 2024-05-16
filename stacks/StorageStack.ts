@@ -1,4 +1,5 @@
-import { Queue, StackContext, Table, use } from 'sst/constructs'
+import { Queue, StackContext, Table } from 'sst/constructs'
+import { Duration } from 'aws-cdk-lib/core'
 
 export function StorageStack({ stack }: StackContext) {
   const table = new Table(stack, 'Webhooks', {
@@ -26,9 +27,25 @@ export function StorageStack({ stack }: StackContext) {
     },
   })
 
+  const deadLetterQueue = new Queue(stack, 'DeadWebhookQueue', {})
+
   const queue = new Queue(stack, 'FailedWebhooksQueue', {
     consumer: {
       function: 'packages/functions/src/process-failed-webhook.handler',
+      cdk: {
+        eventSource: {
+          reportBatchItemFailures: true,
+        },
+      },
+    },
+    cdk: {
+      queue: {
+        deliveryDelay: Duration.seconds(900),
+        deadLetterQueue: {
+          queue: deadLetterQueue.cdk.queue,
+          maxReceiveCount: 2,
+        },
+      },
     },
   })
 
