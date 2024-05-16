@@ -1,4 +1,4 @@
-import { StackContext, Table } from 'sst/constructs'
+import { Queue, StackContext, Table, use } from 'sst/constructs'
 
 export function StorageStack({ stack }: StackContext) {
   const table = new Table(stack, 'Webhooks', {
@@ -26,9 +26,17 @@ export function StorageStack({ stack }: StackContext) {
     },
   })
 
-  table.bindToConsumer('process-webhook', [table])
+  const queue = new Queue(stack, 'FailedWebhooksQueue', {
+    consumer: {
+      function: 'packages/functions/src/process-failed-webhook.handler',
+    },
+  })
+
+  table.bindToConsumer('process-webhook', [table, queue])
+  queue.bind([table])
 
   return {
     table,
+    failedWebhookQueue: queue,
   }
 }
