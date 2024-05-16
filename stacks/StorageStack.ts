@@ -8,20 +8,25 @@ export function StorageStack({ stack }: StackContext) {
       origin: 'string',
       event_type: 'string',
       status: 'string',
+      retries: 'number',
       payload: 'string',
     },
     primaryIndex: { partitionKey: 'PK', sortKey: 'created_at' },
     globalIndexes: {
       OriginIndex: { partitionKey: 'origin', sortKey: 'created_at' },
     },
-    stream: 'keys_only',
+    stream: 'new_image',
     consumers: {
-      process: {
-        function: 'packages/functions/src/process.handler',
+      'process-webhook': {
+        function: {
+          handler: 'packages/functions/src/process.handler',
+        },
         filters: [{ eventName: ['INSERT'] }],
       },
     },
   })
+
+  table.bindToConsumer('process-webhook', [table])
 
   return {
     table,
