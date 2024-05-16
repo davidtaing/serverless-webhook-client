@@ -1,3 +1,5 @@
+export type WebhookOrigin = 'bigcommerce' | 'stripe'
+
 export type WebhookStatus =
   | 'received'
   | 'processing'
