@@ -2,7 +2,7 @@ import to from 'await-to-js'
 import { DynamoDBRecord } from 'aws-lambda'
 
 import { logger } from '../../logger'
-import { WebhookRepository } from '../model'
+import { WebhookRepository } from '../repository'
 import { WebhookStatus } from '../types'
 import {
   createErrorResult,

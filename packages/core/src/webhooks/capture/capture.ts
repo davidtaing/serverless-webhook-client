@@ -1,7 +1,7 @@
 import { APIGatewayProxyStructuredResultV2 } from 'aws-lambda'
 import { WebhookOrigin } from '../types'
 import { extractCompositeKeys, mappers } from './utils'
-import { WebhookRepository } from '../model'
+import { WebhookRepository } from '../repository'
 
 /**
  * Checks if the webhook payload is a duplicate.
