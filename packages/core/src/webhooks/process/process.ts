@@ -1,3 +1,4 @@
+import { SendMessageCommandInput } from '@aws-sdk/client-sqs'
 import to from 'await-to-js'
 import { DynamoDBRecord } from 'aws-lambda'
 
@@ -10,6 +11,7 @@ import {
   createSuccessResult,
 } from './utils'
 import { WebhookProcessingErrorResult, WebhookProcessingResult } from './types'
+import { sendSQSMessage } from '../../queue'
 
 export async function processWebhook(
   record: DynamoDBRecord
@@ -82,7 +84,8 @@ export async function finalizeStatus(
  * Simulates processing by adding an artificial delay along with random errors.
  */
 async function doWork(): Promise<true | Error> {
-  const ERROR_RATE = 0.2 // arbitrary error rate
+  // const ERROR_RATE = 0.2 // arbitrary error rate
+  const ERROR_RATE = 1 // arbitrary error rate
   const BASE_DELAY_MS = 100
   const delay = BASE_DELAY_MS + Math.floor(Math.random() * 100)
 
@@ -118,4 +121,37 @@ export async function updateWebhookStatus(
   }
 
   return null
+}
+
+export async function publishFailures(
+  result: WebhookProcessingResult
+): Promise<WebhookProcessingResult> {
+  if (result.status === 'error') {
+    const messageInput: Omit<SendMessageCommandInput, 'QueueUrl'> = {
+      MessageBody: 'Webhook Failure',
+      MessageAttributes: {
+        PK: {
+          DataType: 'String',
+          StringValue: result.keys?.PK.S,
+        },
+        created_at: {
+          DataType: 'String',
+          StringValue: result.keys?.created_at.S,
+        },
+        status: {
+          DataType: 'String',
+          StringValue: result.status,
+        },
+      },
+    }
+    const { error, sendResult } = await sendSQSMessage(messageInput)
+
+    if (error) {
+      logger.error({ error }, 'Failed to send SQS message')
+    } else {
+      logger.info({ sendResult }, 'Published webhook failure to SQS')
+    }
+  }
+
+  return result
 }

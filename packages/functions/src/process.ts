@@ -5,11 +5,12 @@ import {
   processWebhook,
   finalizeStatus,
   WebhookProcessingResult,
+  publishFailures,
 } from '@serverless-webhook-client/core/webhooks/process'
 
 export const handler: DynamoDBStreamHandler = async event => {
   const promises = event.Records.map(async record =>
-    processWebhook(record).then(finalizeStatus)
+    processWebhook(record).then(finalizeStatus).then(publishFailures)
   )
 
   const results = await Promise.allSettled(promises).then(
