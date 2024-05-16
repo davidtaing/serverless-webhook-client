@@ -16,3 +16,13 @@ export const WebhookStatus: {
   COMPLETED: 'completed',
   OPERATOR_REQUIRED: 'operator_required',
 } as const
+
+export type Webhook = {
+  PK: string
+  created_at: string
+  origin: string
+  event_type: string
+  status: WebhookStatus
+  retries: number
+  payload: any
+}

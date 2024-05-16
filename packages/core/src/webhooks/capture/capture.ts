@@ -1,11 +1,7 @@
-import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
-import to from 'await-to-js'
 import { APIGatewayProxyStructuredResultV2 } from 'aws-lambda'
-import { Table } from 'sst/node/table'
-import { docClient } from '../../database'
 import { WebhookOrigin } from '../types'
 import { extractCompositeKeys, mappers } from './utils'
-import { putWebhook } from '../model'
+import { WebhookRepository } from '../model'
 
 /**
  * Checks if the webhook payload is a duplicate.
@@ -17,12 +13,9 @@ export const checkDuplicate = async (
   payload: any,
   origin: WebhookOrigin
 ): Promise<APIGatewayProxyStructuredResultV2 | null> => {
-  const getCommand = new GetCommand({
-    TableName: Table.Webhooks.tableName,
-    Key: extractCompositeKeys[origin](payload),
-  })
+  const key = extractCompositeKeys[origin](payload)
 
-  const [error, response] = await to(docClient.send(getCommand))
+  const { error, response } = await WebhookRepository.getByKey(key)
 
   if (error) {
     return {
@@ -31,7 +24,7 @@ export const checkDuplicate = async (
     }
   }
 
-  if (response.Item) {
+  if (response?.Item) {
     return {
       statusCode: 200,
       body: JSON.stringify({ message: 'duplicate webhook received' }),
@@ -53,11 +46,10 @@ export const capture = async (
   origin: WebhookOrigin
 ): Promise<APIGatewayProxyStructuredResultV2> => {
   const input = {
-    TableName: Table.Webhooks.tableName,
     Item: mappers[origin](payload),
   }
 
-  const { error, response } = await putWebhook(input)
+  const { error, response } = await WebhookRepository.put(input)
 
   if (error) {
     return {

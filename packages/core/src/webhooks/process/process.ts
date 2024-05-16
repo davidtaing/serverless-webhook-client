@@ -2,14 +2,14 @@ import to from 'await-to-js'
 import { DynamoDBRecord } from 'aws-lambda'
 
 import { logger } from '../../logger'
-import { updateWebhookStatus } from './model'
+import { WebhookRepository } from '../model'
 import { WebhookStatus } from '../types'
 import {
   createErrorResult,
   createDuplicateResult,
   createSuccessResult,
 } from './utils'
-import { WebhookProcessingResult } from './types'
+import { WebhookProcessingErrorResult, WebhookProcessingResult } from './types'
 
 export async function processWebhook(
   record: DynamoDBRecord
@@ -98,4 +98,24 @@ async function doWork(): Promise<true | Error> {
   }
 
   return true
+}
+
+export async function updateWebhookStatus(
+  keys: any,
+  eventID: string,
+  status: WebhookStatus
+): Promise<WebhookProcessingErrorResult | null> {
+  const error = await WebhookRepository.updateStatus(
+    {
+      PK: keys.PK.S,
+      created_at: keys.created_at.S,
+    },
+    status
+  )
+
+  if (error) {
+    return createErrorResult(error, eventID, keys)
+  }
+
+  return null
 }
