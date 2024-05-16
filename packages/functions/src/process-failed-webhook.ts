@@ -18,8 +18,5 @@ export const handler: SQSHandler = async event => {
 
   logger.debug({ response }, 'process-failed-webhooks Response')
 
-  // TODO handle error handling since the SQS message will be deleted if the function doesn't throw an error.
-  // We'll have to delete successful messages manually, then throw an error at the end.
-
   return response
 }
