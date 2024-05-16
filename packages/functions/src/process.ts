@@ -4,16 +4,16 @@ import {
   DynamoDBRecord,
   DynamoDBStreamHandler,
 } from 'aws-lambda'
-import { WebhookStatus } from '@serverless-webhook-client/core/types'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import {
   DynamoDBDocumentClient,
   UpdateCommand,
   UpdateCommandInput,
 } from '@aws-sdk/lib-dynamodb'
+import { WebhookStatus } from '@serverless-webhook-client/core/types'
 import to from 'await-to-js'
-import { Table } from 'sst/node/table'
 import { pino } from 'pino'
+import { Table } from 'sst/node/table'
 
 type WebhookProcessingResult =
   | {
@@ -49,12 +49,16 @@ const dynamoClient = new DynamoDBClient()
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
 export const handler: DynamoDBStreamHandler = async event => {
-  const promises = event.Records.map(processWebhook)
-  const results = (await (
-    await Promise.allSettled(promises)
-  ).filter(
-    promiseResult => promiseResult.status === 'fulfilled'
-  )) as PromiseFulfilledResult<WebhookProcessingResult>[]
+  const promises = event.Records.map(async record =>
+    processWebhook(record).then(finalizeStatus)
+  )
+
+  const results = await Promise.allSettled(promises).then(
+    promiseResults =>
+      promiseResults.filter(
+        promiseResult => promiseResult.status === 'fulfilled'
+      ) as PromiseFulfilledResult<WebhookProcessingResult>[]
+  )
 
   logger.info({ results })
 
@@ -78,70 +82,62 @@ async function processWebhook(
 
   const hasRequiredFields = !record.dynamodb || !keys || !newImage
   if (hasRequiredFields) {
-    return {
-      status: 'error',
+    return createErrorResult(
+      'Invalid record: dynamodb field or dynamodb child fields are missing.',
       eventID,
-      keys,
-      error: new Error(
-        'Invalid record: dynamodb field or dynamodb child fields are missing.'
-      ),
-    }
+      keys
+    )
   }
 
   const isDuplicate = newImage.status.S === WebhookStatus.PROCESSING
   if (isDuplicate) {
-    return {
-      status: 'duplicate',
-      eventID,
-      keys,
-    }
+    return createDuplicateResult(eventID, keys)
   }
 
-  const setProcessingResult = await updateWebhookStatus(
+  const setProcessingError = await updateWebhookStatus(
     keys,
     eventID,
     WebhookStatus.PROCESSING
   )
 
-  if (setProcessingResult) {
-    return setProcessingResult
+  if (setProcessingError) {
+    return setProcessingError
   }
 
   const [error] = await to(doWork())
   if (error) {
-    const setFailedResult = await updateWebhookStatus(
-      keys,
-      eventID,
-      WebhookStatus.FAILED
-    )
-
-    if (setFailedResult) {
-      return setFailedResult
-    }
-
-    return {
-      status: 'error',
-      eventID,
-      keys,
-      error,
-    }
+    return createErrorResult(error, eventID, keys)
   }
 
-  const setCompletedResult = await updateWebhookStatus(
-    keys,
-    eventID,
-    WebhookStatus.COMPLETED
+  return createSuccessResult(eventID, keys)
+}
+
+async function finalizeStatus(
+  processingResult: WebhookProcessingResult
+): Promise<WebhookProcessingResult> {
+  let webhookStatus: WebhookStatus = WebhookStatus.FAILED
+
+  switch (processingResult.status) {
+    case 'duplicate':
+      return processingResult // early exit
+    case 'success':
+      WebhookStatus.COMPLETED
+    case 'error':
+    default:
+      webhookStatus = WebhookStatus.FAILED
+  }
+
+  const updateStatusError = await updateWebhookStatus(
+    processingResult.keys!,
+    processingResult.eventID,
+    webhookStatus
   )
 
-  if (setCompletedResult) {
-    return setCompletedResult
+  if (updateStatusError) {
+    return updateStatusError
   }
 
-  return {
-    status: 'success',
-    eventID,
-    keys,
-  }
+  return processingResult
 }
 
 async function updateWebhookStatus(
@@ -169,7 +165,7 @@ async function updateWebhookStatus(
   const [error] = await to(docClient.send(updateCommand))
 
   if (error) {
-    return { status: 'error', eventID, keys, error }
+    return createErrorResult(error, eventID, keys)
   }
 
   return null
@@ -195,4 +191,39 @@ async function doWork(): Promise<true | Error> {
   }
 
   return true
+}
+
+function createErrorResult(
+  error: Error | string,
+  eventID: string,
+  keys?: { [key: string]: AttributeValue }
+): WebhookProcessingErrorResult {
+  return {
+    status: 'error',
+    eventID,
+    keys,
+    error: typeof error === 'string' ? new Error(error) : error,
+  }
+}
+
+function createDuplicateResult(
+  eventID: string,
+  keys: { [key: string]: AttributeValue }
+): WebhookProcessingResult {
+  return {
+    status: 'duplicate',
+    eventID,
+    keys,
+  }
+}
+
+function createSuccessResult(
+  eventID: string,
+  keys: { [key: string]: AttributeValue }
+): WebhookProcessingResult {
+  return {
+    status: 'success',
+    eventID,
+    keys,
+  }
 }
