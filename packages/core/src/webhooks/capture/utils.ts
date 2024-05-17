@@ -50,6 +50,7 @@ export function bigcommerceWebhookMapper(payload: any) {
     event_type: payload.scope,
     status: 'received',
     payload,
+    retries: 0,
   }
 }
 
@@ -65,5 +66,6 @@ export function stripeWebhookMapper(payload: any) {
     event_type: payload.type,
     status: 'received',
     payload,
+    retries: 0,
   }
 }
