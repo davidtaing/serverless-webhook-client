@@ -53,6 +53,8 @@ export function mapDynamoStreamRecord(
     status: WebhookProcessingStatus.CONTINUE,
   }
 
+  logger.debug({ input }, 'Mapped DynamoDB Stream Record')
+
   return Promise.resolve(input)
 }
 
@@ -72,15 +74,15 @@ export const validateStatus: ProcessPipelineFunction = async args => {
     response?.Item?.status === WebhookStatus.PROCESSING ||
     response?.Item?.status === WebhookStatus.COMPLETED
 
-  if (!isDuplicate) {
+  const operatorRequired =
+    response?.Item?.status === WebhookStatus.OPERATOR_REQUIRED
+
+  if (isDuplicate) {
     return {
       ...args,
       status: WebhookProcessingStatus.DUPLICATE,
     }
   }
-
-  const operatorRequired =
-    response?.Item?.status === WebhookStatus.OPERATOR_REQUIRED
 
   if (operatorRequired) {
     return {
@@ -88,6 +90,8 @@ export const validateStatus: ProcessPipelineFunction = async args => {
       status: WebhookProcessingStatus.OPERATOR_REQUIRED,
     }
   }
+
+  logger.debug('Validated Webhook Status')
 
   return args
 }
@@ -114,6 +118,8 @@ export const setProcessing: ProcessPipelineFunction = async (
     }
   }
 
+  logger.debug('Set Webhook Status to Processing')
+
   return args
 }
 
@@ -129,6 +135,8 @@ export const processWebhook: ProcessPipelineFunction = async (
       status: WebhookProcessingStatus.FAILED,
     }
   }
+
+  logger.debug('Processed Webhook')
 
   return args
 }
@@ -158,6 +166,8 @@ export const setFinalStatus: ProcessPipelineFunction = async args => {
       result: updateStatusError,
     }
   }
+
+  logger.debug({ status: webhookStatus }, 'Set Final Webhook Status')
 
   return args
 }
