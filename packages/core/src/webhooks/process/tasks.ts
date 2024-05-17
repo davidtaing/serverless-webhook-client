@@ -91,7 +91,7 @@ export const validateStatus: ProcessPipelineFunction = async args => {
     }
   }
 
-  logger.debug({ key: args.key }, 'Validated Webhook Status')
+  logger.info({ key: args.key }, 'Validated Webhook Status')
 
   return args
 }
@@ -121,7 +121,7 @@ export const setProcessing: ProcessPipelineFunction = async (
     }
   }
 
-  logger.debug('Set Webhook Status to Processing')
+  logger.info('Set Webhook Status to Processing')
 
   return args
 }
@@ -140,7 +140,7 @@ export const processWebhook: ProcessPipelineFunction = async (
     }
   }
 
-  logger.debug('Processed Webhook')
+  logger.info('Processed Webhook')
 
   return args
 }
@@ -171,7 +171,7 @@ export const setFinalStatus: ProcessPipelineFunction = async args => {
     }
   }
 
-  logger.debug({ status: webhookStatus }, 'Set Final Webhook Status')
+  logger.info({ status: webhookStatus }, 'Set Final Webhook Status')
 
   return args
 }
