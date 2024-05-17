@@ -1,4 +1,5 @@
-import { AttributeValue } from 'aws-lambda'
+import { AttributeValue } from '@aws-sdk/client-dynamodb'
+import { Webhook } from '../types'
 
 export type WebhookProcessingResult =
   | {
@@ -28,3 +29,12 @@ export type WebhookProcessingErrorResult = Extract<
   WebhookProcessingResult,
   { status: 'error' }
 >
+
+export type WebhookProcessingInput = {
+  itemIdentifier: string // this will be the eventID for dynamodb streams and the messageID for SQS messages
+  keys: {
+    PK: string
+    created_at: string
+  }
+  item: Webhook
+}
