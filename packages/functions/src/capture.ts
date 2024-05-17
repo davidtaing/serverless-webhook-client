@@ -2,7 +2,7 @@ import { APIGatewayProxyHandlerV2 } from 'aws-lambda'
 
 import {
   capture,
-  validateStatus,
+  validateDuplicate,
   determineOrigin,
   extractCompositeKeys,
 } from '@serverless-webhook-client/core/webhooks/capture'
@@ -40,7 +40,7 @@ export const handler: APIGatewayProxyHandlerV2 = async event => {
   // We should add handle validation of the payload and verify sender here.
   // But since this is a proof of concept, we'll skip that for now.
   const key = extractCompositeKeys[origin](payload)
-  const invalidStatus = await validateStatus(key)
+  const invalidStatus = await validateDuplicate(key)
 
   // early exit on duplicates or Dynamo errors
   if (invalidStatus !== null) {
