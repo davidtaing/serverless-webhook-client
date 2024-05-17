@@ -2,6 +2,7 @@ import { SQSBatchItemFailure, SQSEvent, SQSHandler } from 'aws-lambda'
 
 import {
   buildLambdaResponse,
+  logResults,
   ProcessPipelineInput,
   processWebhook,
   setFinalStatus,
@@ -22,6 +23,7 @@ export const handler: SQSHandler = async event => {
       .then(setProcessing)
       .then(processWebhook)
       .then(setFinalStatus)
+      .then(logResults)
   )
 
   const results = await Promise.all(promises)

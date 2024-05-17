@@ -78,10 +78,6 @@ export const validateStatus: ProcessPipelineFunction = async args => {
     response?.Item?.status === WebhookStatus.OPERATOR_REQUIRED
 
   if (isDuplicate) {
-    logger.info(
-      { key: args.key },
-      'Webhook cannot be processed: duplicate webhook'
-    )
     return {
       ...args,
       status: WebhookProcessingStatus.DUPLICATE,
@@ -89,17 +85,13 @@ export const validateStatus: ProcessPipelineFunction = async args => {
   }
 
   if (operatorRequired) {
-    logger.info(
-      { key: args.key },
-      'Webhook cannot be processed: operator required'
-    )
     return {
       ...args,
       status: WebhookProcessingStatus.OPERATOR_REQUIRED,
     }
   }
 
-  logger.debug({ args }, 'Validated Webhook Status')
+  logger.debug({ key: args.key }, 'Validated Webhook Status')
 
   return args
 }
@@ -113,8 +105,6 @@ export const setProcessing: ProcessPipelineFunction = async (
   args: ProcessPipelineInput
 ) => {
   if (args.status !== WebhookProcessingStatus.CONTINUE) return args
-
-  logger.debug({ args }, 'Set Processing 1')
 
   const updateResult = await updateWebhookStatus(
     args.key,
@@ -143,6 +133,7 @@ export const processWebhook: ProcessPipelineFunction = async (
 
   const [error] = await to(doSomeWork(args.key, args.item))
   if (error) {
+    logger.error({ key: args.key }, 'Failed to process Webhook')
     return {
       ...args,
       status: WebhookProcessingStatus.FAILED,
@@ -214,6 +205,17 @@ export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
   }
 
   logger.info({ sendResult }, 'Published webhook failure to SQS')
+
+  return args
+}
+
+export const logResults: ProcessPipelineFunction = async args => {
+  const logPayload = { status: args.status }
+  if (args.status === WebhookProcessingStatus.FAILED) {
+    logger.error(logPayload, 'Webhook Processing Failed')
+  } else {
+    logger.error(logPayload, 'Webhook Processing Result')
+  }
 
   return args
 }

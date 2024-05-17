@@ -2,6 +2,7 @@ import { DynamoDBBatchItemFailure, DynamoDBStreamHandler } from 'aws-lambda'
 
 import {
   buildLambdaResponse,
+  logResults,
   mapDynamoStreamRecord,
   processWebhook,
   sendFailuresToSQS,
@@ -18,6 +19,7 @@ export const handler: DynamoDBStreamHandler = async event => {
       .then(processWebhook)
       .then(setFinalStatus)
       .then(sendFailuresToSQS)
+      .then(logResults)
   )
 
   const results = await Promise.all(promises)

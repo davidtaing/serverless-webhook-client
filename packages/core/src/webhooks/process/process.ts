@@ -23,7 +23,6 @@ export async function doSomeWork(
   // randomly throw an error
   if (Math.random() < ERROR_RATE) {
     const error = new Error('failed to process webhook')
-    logger.error({ error }, 'Simulated Error')
     throw error
   }
 
