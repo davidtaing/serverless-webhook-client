@@ -169,11 +169,11 @@ export const setFinalStatus: ProcessPipelineFunction = async args => {
 
   logger.debug({ status: webhookStatus }, 'Set Final Webhook Status')
 
-  return args
+  return { ...args, status: WebhookProcessingStatus.COMPLETED }
 }
 
 export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
-  if (args.status !== WebhookProcessingStatus.CONTINUE) return args
+  if (args.status !== WebhookProcessingStatus.COMPLETED) return args
 
   const messageInput: Omit<SendMessageCommandInput, 'QueueUrl'> = {
     MessageBody: 'Webhook Failure',
@@ -197,11 +197,12 @@ export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
 
   if (error) {
     logger.error({ error }, 'Failed to send SQS message')
-  } else {
-    logger.info({ sendResult }, 'Published webhook failure to SQS')
+    return { ...args, status: WebhookProcessingStatus.FAILED }
   }
 
-  return { ...args, status: WebhookProcessingStatus.COMPLETED }
+  logger.info({ sendResult }, 'Published webhook failure to SQS')
+
+  return args
 }
 
 export const buildLambdaResponse = (
