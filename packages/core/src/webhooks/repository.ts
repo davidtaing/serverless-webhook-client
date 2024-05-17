@@ -51,10 +51,21 @@ export class WebhookRepository {
     return error
   }
 
+  /**
+   *
+   * @param keys Composite key PK and created_at (SK)
+   * @param status New status to update the webhook to
+   * @returns error for failed updates, otherwise null
+   * @remarks if the status is set to 'processing', the retries count will also be incremented
+   */
   static async updateStatus(
     keys: { PK: string; created_at: string },
     status: WebhookStatus
   ) {
+    if (status === WebhookStatus.PROCESSING) {
+      return WebhookRepository.setProcessingStatus(keys)
+    }
+
     const input: Omit<UpdateCommandInput, 'TableName'> = {
       Key: keys,
       UpdateExpression: 'SET #Status = :StatusValue',
@@ -63,6 +74,25 @@ export class WebhookRepository {
       },
       ExpressionAttributeValues: {
         ':StatusValue': status,
+      },
+      ReturnValues: 'NONE',
+    }
+
+    return WebhookRepository.update(input)
+  }
+
+  static async setProcessingStatus(keys: { PK: string; created_at: string }) {
+    const input: Omit<UpdateCommandInput, 'TableName'> = {
+      Key: keys,
+      UpdateExpression:
+        'SET #Status = :StatusValue, #Retries = #Retries + :IncrementValue',
+      ExpressionAttributeNames: {
+        '#Status': 'status',
+        '#Retries': 'retries',
+      },
+      ExpressionAttributeValues: {
+        ':StatusValue': WebhookStatus.PROCESSING,
+        ':IncrementValue': 1,
       },
       ReturnValues: 'NONE',
     }

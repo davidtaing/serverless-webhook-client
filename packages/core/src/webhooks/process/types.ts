@@ -1,30 +1,17 @@
-import { AttributeValue } from 'aws-lambda'
-import { WebhookKey } from '../types'
+import { WebhookStatus } from '../types'
 
-export type WebhookProcessingResult =
-  | {
-      status: 'error'
-      eventID: string
-      keys?: WebhookKey
-      error: Error
-    }
-  | {
-      status: 'duplicate'
-      eventID: string
-      keys: WebhookKey
-    }
-  | {
-      status: 'success'
-      eventID: string
-      keys: WebhookKey
-    }
-  | {
-      status: 'operator_required'
-      eventID: string
-      keys: WebhookKey
-    }
+/**
+ * Adds 'duplicate' and 'continue' statuses to the WebhookStatus type.
+ * @remarks this is a separate type because we want to prevent these additional statuses from being written to the database
+ * @field DUPLICATE - Signals that webhook may already be processing or already be completed
+ * @field CONTINUE - Signals that the next stage can continue processing the event
+ */
+export type WebhookProcessingStatus = WebhookStatus | 'duplicate' | 'continue'
 
-export type WebhookProcessingErrorResult = Extract<
-  WebhookProcessingResult,
-  { status: 'error' }
->
+export const WebhookProcessingStatus: {
+  [key in Uppercase<WebhookProcessingStatus>]: Lowercase<key>
+} = {
+  ...WebhookStatus,
+  DUPLICATE: 'duplicate',
+  CONTINUE: 'continue',
+} as const

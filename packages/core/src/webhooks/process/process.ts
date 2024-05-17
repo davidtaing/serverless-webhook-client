@@ -2,13 +2,7 @@ import to from 'await-to-js'
 import { logger } from '../../logger'
 import { WebhookRepository } from '../repository'
 import { WebhookKey, Webhook, WebhookStatus } from '../types'
-import { WebhookProcessingResult, WebhookProcessingErrorResult } from './types'
-import {
-  createDuplicateResult,
-  createErrorResult,
-  createOperatorRequiredResult,
-  createSuccessResult,
-} from './utils'
+import { WebhookProcessingStatus } from './types'
 import { SendMessageCommandInput } from '@aws-sdk/client-sqs'
 import { sendSQSMessage } from '../../queue'
 import {
@@ -23,7 +17,7 @@ export type ProcessPipelineInput = {
   key: WebhookKey
   item: Webhook
   itemIdentifier: string
-  result: WebhookProcessingResult | null
+  status: WebhookProcessingStatus
 }
 
 export type ProcessPipelineFunction = (
@@ -55,19 +49,21 @@ export function mapDynamoStreamRecord(
       payload: item.payload,
     },
     itemIdentifier: eventID,
-    result: null,
+    status: WebhookProcessingStatus.CONTINUE,
   }
 
   return Promise.resolve(input)
 }
 
 export const validateStatus: ProcessPipelineFunction = async args => {
+  if (args.status !== WebhookProcessingStatus.CONTINUE) return args
+
   const { error, response } = await WebhookRepository.getByKey(args.key)
 
   if (error) {
     return {
       ...args,
-      result: createErrorResult(error, args.itemIdentifier, args.key),
+      status: WebhookProcessingStatus.FAILED,
     }
   }
 
@@ -78,7 +74,7 @@ export const validateStatus: ProcessPipelineFunction = async args => {
   if (!isDuplicate) {
     return {
       ...args,
-      result: createDuplicateResult(args.itemIdentifier, args.key),
+      status: WebhookProcessingStatus.DUPLICATE,
     }
   }
 
@@ -88,49 +84,52 @@ export const validateStatus: ProcessPipelineFunction = async args => {
   if (operatorRequired) {
     return {
       ...args,
-      result: createOperatorRequiredResult(args.itemIdentifier, args.key),
+      status: WebhookProcessingStatus.OPERATOR_REQUIRED,
     }
   }
 
   return args
 }
 
+/**
+ * Sets the webhook status to 'processing' and increments the retry count.
+ * @param args
+ * @returns
+ */
 export const setProcessing: ProcessPipelineFunction = async (
   args: ProcessPipelineInput
 ) => {
-  if (args.result) return args
+  if (args.status !== WebhookProcessingStatus.CONTINUE) return args
 
   const updateResult = await updateWebhookStatus(
     args.key,
-    args.itemIdentifier,
     WebhookStatus.PROCESSING
   )
 
-  return {
-    key: args.key,
-    item: args.item,
-    itemIdentifier: args.itemIdentifier,
-    result: updateResult,
+  if (updateResult) {
+    return {
+      ...args,
+      status: WebhookProcessingStatus.FAILED,
+    }
   }
+
+  return args
 }
 
 export const processWebhook: ProcessPipelineFunction = async (
   args: ProcessPipelineInput
 ) => {
-  if (args.result) return args
+  if (args.status !== WebhookProcessingStatus.CONTINUE) return args
 
   const [error] = await to(doSomeWork(args.key, args.item))
   if (error) {
     return {
       ...args,
-      result: createErrorResult(error, args.itemIdentifier, args.key),
+      status: WebhookProcessingStatus.FAILED,
     }
   }
 
-  return {
-    ...args,
-    result: createSuccessResult(args.itemIdentifier, args.key),
-  }
+  return args
 }
 
 /**
@@ -163,26 +162,28 @@ async function doSomeWork(
 
 export const setFinalStatus: ProcessPipelineFunction = async args => {
   let webhookStatus: WebhookStatus = WebhookStatus.FAILED
-  const { result } = args
 
-  switch (result?.status ?? 'error') {
-    case 'duplicate':
-      return args // early exit
-    case 'success':
-      WebhookStatus.COMPLETED
-    case 'error':
+  switch (args.status) {
+    // Early Exits
+    case WebhookProcessingStatus.OPERATOR_REQUIRED:
+    case WebhookProcessingStatus.DUPLICATE:
+      return args
+    case WebhookProcessingStatus.CONTINUE:
+      webhookStatus = WebhookStatus.COMPLETED
+      break
+    case WebhookProcessingStatus.FAILED:
     default:
       webhookStatus = WebhookStatus.FAILED
   }
 
-  const updateStatusError = await updateWebhookStatus(
-    args.key,
-    args.itemIdentifier,
-    webhookStatus
-  )
+  const updateStatusError = await updateWebhookStatus(args.key, webhookStatus)
 
   if (updateStatusError) {
-    return { ...args, result: updateStatusError }
+    return {
+      ...args,
+      status: WebhookProcessingStatus.FAILED,
+      result: updateStatusError,
+    }
   }
 
   return args
@@ -190,37 +191,34 @@ export const setFinalStatus: ProcessPipelineFunction = async args => {
 
 export async function updateWebhookStatus(
   key: WebhookKey,
-  eventID: string,
   status: WebhookStatus
-): Promise<WebhookProcessingErrorResult | null> {
+): Promise<Error | null> {
   const error = await WebhookRepository.updateStatus(key, status)
 
   if (error) {
-    return createErrorResult(error, eventID, key)
+    return error
   }
 
   return null
 }
 
 export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
-  const { result } = args
-  if (!result || result?.status === 'success' || result?.status === 'duplicate')
-    return args
+  if (args.status !== WebhookProcessingStatus.CONTINUE) return args
 
   const messageInput: Omit<SendMessageCommandInput, 'QueueUrl'> = {
     MessageBody: 'Webhook Failure',
     MessageAttributes: {
       PK: {
         DataType: 'String',
-        StringValue: result.keys?.PK,
+        StringValue: args.key.PK,
       },
       created_at: {
         DataType: 'String',
-        StringValue: result.keys?.created_at,
+        StringValue: args.key.created_at,
       },
       status: {
         DataType: 'String',
-        StringValue: result.status,
+        StringValue: args.status,
       },
     },
   }
@@ -233,13 +231,13 @@ export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
     logger.info({ sendResult }, 'Published webhook failure to SQS')
   }
 
-  return args
+  return { ...args, status: WebhookProcessingStatus.COMPLETED }
 }
 
 export const buildLambdaResponse = (
   args: ProcessPipelineInput
 ): DynamoDBBatchItemFailure | SQSBatchItemFailure | null => {
-  if (args.result?.status === 'error') {
+  if (args.status === WebhookProcessingStatus.FAILED) {
     return {
       itemIdentifier: args.itemIdentifier,
     }
