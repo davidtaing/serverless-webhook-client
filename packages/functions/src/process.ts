@@ -1,34 +1,30 @@
-import { DynamoDBBatchResponse, DynamoDBStreamHandler } from 'aws-lambda'
+import { DynamoDBBatchItemFailure, DynamoDBStreamHandler } from 'aws-lambda'
 
-import { logger } from '@serverless-webhook-client/core/logger'
 import {
+  buildLambdaResponse,
+  mapDynamoStreamRecord,
   processWebhook,
-  finalizeStatus,
-  WebhookProcessingResult,
-  publishFailures,
+  sendFailuresToSQS,
+  setFinalStatus,
+  setProcessing,
+  validateStatus,
 } from '@serverless-webhook-client/core/webhooks/process'
 
 export const handler: DynamoDBStreamHandler = async event => {
-  const promises = event.Records.map(async record =>
-    processWebhook(record).then(finalizeStatus).then(publishFailures)
+  const promises = event.Records.map(record =>
+    mapDynamoStreamRecord(record)
+      .then(validateStatus)
+      .then(setProcessing)
+      .then(processWebhook)
+      .then(setFinalStatus)
+      .then(sendFailuresToSQS)
   )
 
-  const results = await Promise.allSettled(promises).then(
-    promiseResults =>
-      promiseResults.filter(
-        promiseResult => promiseResult.status === 'fulfilled'
-      ) as PromiseFulfilledResult<WebhookProcessingResult>[]
-  )
+  const results = await Promise.all(promises)
+  const errors = results.map(buildLambdaResponse).filter(Boolean) as
+    | DynamoDBBatchItemFailure[]
 
-  logger.info({ results })
-
-  const response: DynamoDBBatchResponse = {
-    batchItemFailures: results
-      .filter(result => result.value.status === 'error')
-      .map(item => ({
-        itemIdentifier: item.value.eventID,
-      })),
+  return {
+    batchItemFailures: errors,
   }
-
-  return response
 }

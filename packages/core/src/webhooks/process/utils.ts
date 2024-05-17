@@ -1,10 +1,11 @@
 import { AttributeValue } from 'aws-lambda'
 import { WebhookProcessingErrorResult, WebhookProcessingResult } from '.'
+import { WebhookKey } from '../types'
 
 export function createErrorResult(
   error: Error | string,
   eventID: string,
-  keys?: { [key: string]: AttributeValue }
+  keys?: WebhookKey
 ): WebhookProcessingErrorResult {
   return {
     status: 'error',
@@ -16,7 +17,7 @@ export function createErrorResult(
 
 export function createDuplicateResult(
   eventID: string,
-  keys: { [key: string]: AttributeValue }
+  keys: WebhookKey
 ): WebhookProcessingResult {
   return {
     status: 'duplicate',
@@ -27,10 +28,21 @@ export function createDuplicateResult(
 
 export function createSuccessResult(
   eventID: string,
-  keys: { [key: string]: AttributeValue }
+  keys: WebhookKey
 ): WebhookProcessingResult {
   return {
     status: 'success',
+    eventID,
+    keys,
+  }
+}
+
+export function createOperatorRequiredResult(
+  eventID: string,
+  keys: WebhookKey
+): WebhookProcessingResult {
+  return {
+    status: 'operator_required',
     eventID,
     keys,
   }

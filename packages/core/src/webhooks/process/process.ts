@@ -1,89 +1,147 @@
-import { SendMessageCommandInput } from '@aws-sdk/client-sqs'
 import to from 'await-to-js'
-import { DynamoDBRecord } from 'aws-lambda'
-
 import { logger } from '../../logger'
 import { WebhookRepository } from '../repository'
-import { WebhookStatus } from '../types'
+import { WebhookKey, Webhook, WebhookStatus } from '../types'
+import { WebhookProcessingResult, WebhookProcessingErrorResult } from './types'
 import {
-  createErrorResult,
   createDuplicateResult,
+  createErrorResult,
+  createOperatorRequiredResult,
   createSuccessResult,
 } from './utils'
-import { WebhookProcessingErrorResult, WebhookProcessingResult } from './types'
+import { SendMessageCommandInput } from '@aws-sdk/client-sqs'
 import { sendSQSMessage } from '../../queue'
+import {
+  DynamoDBBatchItemFailure,
+  DynamoDBRecord,
+  SQSBatchItemFailure,
+} from 'aws-lambda'
+import { unmarshall } from '@aws-sdk/util-dynamodb'
+import { AttributeValue } from '@aws-sdk/client-dynamodb'
 
-export async function processWebhook(
+export type ProcessPipelineInput = {
+  key: WebhookKey
+  item: Webhook
+  itemIdentifier: string
+  result: WebhookProcessingResult | null
+}
+
+export type ProcessPipelineFunction = (
+  input: ProcessPipelineInput
+) => Promise<ProcessPipelineInput>
+
+export function mapDynamoStreamRecord(
   record: DynamoDBRecord
-): Promise<WebhookProcessingResult> {
-  const keys = record.dynamodb?.Keys
+): Promise<ProcessPipelineInput> {
+  const rawItem = record.dynamodb?.NewImage as Record<string, AttributeValue>
+  const rawKeys = record.dynamodb?.Keys as Record<string, AttributeValue>
   const eventID = record.eventID!
-  const newImage = record.dynamodb?.NewImage
 
-  const hasRequiredFields = !record.dynamodb || !keys || !newImage
-  if (hasRequiredFields) {
-    return createErrorResult(
-      'Invalid record: dynamodb field or dynamodb child fields are missing.',
-      eventID,
-      keys
-    )
+  const keys = unmarshall(rawKeys)
+  const item = unmarshall(rawItem)
+
+  const input: ProcessPipelineInput = {
+    key: {
+      PK: keys.PK,
+      created_at: keys.created_at,
+    },
+    item: {
+      PK: keys.PK,
+      created_at: item.created_at,
+      origin: item.origin,
+      event_type: item.event_type,
+      status: item.status as WebhookStatus,
+      retries: 0,
+      payload: item.payload,
+    },
+    itemIdentifier: eventID,
+    result: null,
   }
 
-  const isDuplicate = newImage.status.S === WebhookStatus.PROCESSING
-  if (isDuplicate) {
-    return createDuplicateResult(eventID, keys)
+  return Promise.resolve(input)
+}
+
+export const validateStatus: ProcessPipelineFunction = async args => {
+  const { error, response } = await WebhookRepository.getByKey(args.key)
+
+  if (error) {
+    return {
+      ...args,
+      result: createErrorResult(error, args.itemIdentifier, args.key),
+    }
   }
 
-  const setProcessingError = await updateWebhookStatus(
-    keys,
-    eventID,
+  const isDuplicate =
+    response?.Item?.status === WebhookStatus.PROCESSING ||
+    response?.Item?.status === WebhookStatus.COMPLETED
+
+  if (!isDuplicate) {
+    return {
+      ...args,
+      result: createDuplicateResult(args.itemIdentifier, args.key),
+    }
+  }
+
+  const operatorRequired =
+    response?.Item?.status === WebhookStatus.OPERATOR_REQUIRED
+
+  if (operatorRequired) {
+    return {
+      ...args,
+      result: createOperatorRequiredResult(args.itemIdentifier, args.key),
+    }
+  }
+
+  return args
+}
+
+export const setProcessing: ProcessPipelineFunction = async (
+  args: ProcessPipelineInput
+) => {
+  if (args.result) return args
+
+  const updateResult = await updateWebhookStatus(
+    args.key,
+    args.itemIdentifier,
     WebhookStatus.PROCESSING
   )
 
-  if (setProcessingError) {
-    return setProcessingError
+  return {
+    key: args.key,
+    item: args.item,
+    itemIdentifier: args.itemIdentifier,
+    result: updateResult,
   }
-
-  const [error] = await to(doWork())
-  if (error) {
-    return createErrorResult(error, eventID, keys)
-  }
-
-  return createSuccessResult(eventID, keys)
 }
 
-export async function finalizeStatus(
-  processingResult: WebhookProcessingResult
-): Promise<WebhookProcessingResult> {
-  let webhookStatus: WebhookStatus = WebhookStatus.FAILED
+export const processWebhook: ProcessPipelineFunction = async (
+  args: ProcessPipelineInput
+) => {
+  if (args.result) return args
 
-  switch (processingResult.status) {
-    case 'duplicate':
-      return processingResult // early exit
-    case 'success':
-      WebhookStatus.COMPLETED
-    case 'error':
-    default:
-      webhookStatus = WebhookStatus.FAILED
+  const [error] = await to(doSomeWork(args.key, args.item))
+  if (error) {
+    return {
+      ...args,
+      result: createErrorResult(error, args.itemIdentifier, args.key),
+    }
   }
 
-  const updateStatusError = await updateWebhookStatus(
-    processingResult.keys!,
-    processingResult.eventID,
-    webhookStatus
-  )
-
-  if (updateStatusError) {
-    return updateStatusError
+  return {
+    ...args,
+    result: createSuccessResult(args.itemIdentifier, args.key),
   }
-
-  return processingResult
 }
 
 /**
  * Simulates processing by adding an artificial delay along with random errors.
  */
-async function doWork(): Promise<true | Error> {
+async function doSomeWork(
+  key: WebhookKey,
+  record: Webhook
+): Promise<true | Error> {
+  logger.info({ key }, 'Processing webhook')
+
   // const ERROR_RATE = 0.2 // arbitrary error rate
   const ERROR_RATE = 1 // arbitrary error rate
   const BASE_DELAY_MS = 100
@@ -103,55 +161,89 @@ async function doWork(): Promise<true | Error> {
   return true
 }
 
+export const setFinalStatus: ProcessPipelineFunction = async args => {
+  let webhookStatus: WebhookStatus = WebhookStatus.FAILED
+  const { result } = args
+
+  switch (result?.status ?? 'error') {
+    case 'duplicate':
+      return args // early exit
+    case 'success':
+      WebhookStatus.COMPLETED
+    case 'error':
+    default:
+      webhookStatus = WebhookStatus.FAILED
+  }
+
+  const updateStatusError = await updateWebhookStatus(
+    args.key,
+    args.itemIdentifier,
+    webhookStatus
+  )
+
+  if (updateStatusError) {
+    return { ...args, result: updateStatusError }
+  }
+
+  return args
+}
+
 export async function updateWebhookStatus(
-  keys: any,
+  key: WebhookKey,
   eventID: string,
   status: WebhookStatus
 ): Promise<WebhookProcessingErrorResult | null> {
-  const error = await WebhookRepository.updateStatus(
-    {
-      PK: keys.PK.S,
-      created_at: keys.created_at.S,
-    },
-    status
-  )
+  const error = await WebhookRepository.updateStatus(key, status)
 
   if (error) {
-    return createErrorResult(error, eventID, keys)
+    return createErrorResult(error, eventID, key)
   }
 
   return null
 }
 
-export async function publishFailures(
-  result: WebhookProcessingResult
-): Promise<WebhookProcessingResult> {
-  if (result.status === 'error') {
-    const messageInput: Omit<SendMessageCommandInput, 'QueueUrl'> = {
-      MessageBody: 'Webhook Failure',
-      MessageAttributes: {
-        PK: {
-          DataType: 'String',
-          StringValue: result.keys?.PK.S,
-        },
-        created_at: {
-          DataType: 'String',
-          StringValue: result.keys?.created_at.S,
-        },
-        status: {
-          DataType: 'String',
-          StringValue: result.status,
-        },
-      },
-    }
-    const { error, sendResult } = await sendSQSMessage(messageInput)
+export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
+  const { result } = args
+  if (!result || result?.status === 'success' || result?.status === 'duplicate')
+    return args
 
-    if (error) {
-      logger.error({ error }, 'Failed to send SQS message')
-    } else {
-      logger.info({ sendResult }, 'Published webhook failure to SQS')
+  const messageInput: Omit<SendMessageCommandInput, 'QueueUrl'> = {
+    MessageBody: 'Webhook Failure',
+    MessageAttributes: {
+      PK: {
+        DataType: 'String',
+        StringValue: result.keys?.PK,
+      },
+      created_at: {
+        DataType: 'String',
+        StringValue: result.keys?.created_at,
+      },
+      status: {
+        DataType: 'String',
+        StringValue: result.status,
+      },
+    },
+  }
+
+  const { error, sendResult } = await sendSQSMessage(messageInput)
+
+  if (error) {
+    logger.error({ error }, 'Failed to send SQS message')
+  } else {
+    logger.info({ sendResult }, 'Published webhook failure to SQS')
+  }
+
+  return args
+}
+
+export const buildLambdaResponse = (
+  args: ProcessPipelineInput
+): DynamoDBBatchItemFailure | SQSBatchItemFailure | null => {
+  if (args.result?.status === 'error') {
+    return {
+      itemIdentifier: args.itemIdentifier,
     }
   }
 
-  return result
+  return null
 }
