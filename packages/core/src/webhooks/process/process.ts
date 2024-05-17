@@ -35,11 +35,5 @@ export async function updateWebhookStatus(
   key: WebhookKey,
   status: WebhookStatus
 ): Promise<Error | null> {
-  const error = await WebhookRepository.updateStatus(key, status)
-
-  if (error) {
-    return error
-  }
-
-  return null
+  return WebhookRepository.updateStatus(key, status)
 }
