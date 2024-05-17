@@ -173,7 +173,7 @@ export const setFinalStatus: ProcessPipelineFunction = async args => {
 
   logger.debug({ status: webhookStatus }, 'Set Final Webhook Status')
 
-  return { ...args, status: WebhookProcessingStatus.COMPLETED }
+  return args
 }
 
 export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
