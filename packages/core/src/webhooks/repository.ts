@@ -113,8 +113,6 @@ export class WebhookRepository {
       ReturnValues: 'NONE',
     }
 
-    logger.debug({ keys }, 'Setting Webhook to Processing')
-
     return WebhookRepository.update(input)
   }
 }

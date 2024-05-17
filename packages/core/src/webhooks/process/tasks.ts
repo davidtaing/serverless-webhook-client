@@ -91,7 +91,7 @@ export const validateStatus: ProcessPipelineFunction = async args => {
     }
   }
 
-  logger.info({ key: args.key }, 'Validated Webhook Status')
+  logger.info({ PK: args.key.PK }, 'Validated Webhook Status')
 
   return args
 }
@@ -112,7 +112,7 @@ export const setProcessing: ProcessPipelineFunction = async (
   )
 
   if (updateResult) {
-    logger.error({ key: args.key }, 'Failed to set Webhook Status')
+    logger.error({ PK: args.key.PK }, 'Failed to set Webhook Status')
     logger.debug({ updateResult }, 'Set Processing error')
 
     return {
@@ -121,7 +121,7 @@ export const setProcessing: ProcessPipelineFunction = async (
     }
   }
 
-  logger.info('Set Webhook Status to Processing')
+  logger.info({ PK: args.key.PK }, 'Set Webhook Status to Processing')
 
   return args
 }
@@ -133,7 +133,7 @@ export const processWebhook: ProcessPipelineFunction = async (
 
   const [error] = await to(doSomeWork(args.key, args.item))
   if (error) {
-    logger.error({ key: args.key }, 'Failed to process Webhook')
+    logger.error({ PK: args.key.PK }, 'Failed to process Webhook')
     return {
       ...args,
       status: WebhookProcessingStatus.FAILED,
@@ -200,17 +200,20 @@ export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
   const { error, sendResult } = await sendSQSMessage(messageInput)
 
   if (error) {
-    logger.error({ error }, 'Failed to send SQS message')
+    logger.error({ PK: args.key.PK, error }, 'Failed to send SQS message')
     return { ...args, status: WebhookProcessingStatus.FAILED }
   }
 
-  logger.info({ sendResult }, 'Published webhook failure to SQS')
+  logger.info(
+    { PK: args.key.PK, sendResult },
+    'Published webhook failure to SQS'
+  )
 
   return args
 }
 
 export const logResults: ProcessPipelineFunction = async args => {
-  const logPayload = { status: args.status }
+  const logPayload = { PK: args.key.PK, status: args.status }
   if (args.status === WebhookProcessingStatus.FAILED) {
     logger.error(logPayload, 'Webhook Processing Failed')
   } else {
