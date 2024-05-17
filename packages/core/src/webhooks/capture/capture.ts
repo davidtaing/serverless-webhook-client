@@ -1,15 +1,16 @@
 import { APIGatewayProxyStructuredResultV2 } from 'aws-lambda'
-import { WebhookOrigin } from '../types'
+import { WebhookOrigin, WebhookStatus } from '../types'
 import { extractCompositeKeys, mappers } from './utils'
 import { WebhookRepository } from '../repository'
 
 /**
- * Checks if the webhook payload is a duplicate.
+ * Validates the status of a webhook payload.
  * @param payload - The webhook payload.
  * @param origin - The origin of the webhook.
- * @returns null if the webhook is not a duplicate, otherwise an API Gateway response which signals an early exit.
+ * @returns A Promise that resolves to null if a webhook can be processed, otherwise and APIGatewayProxyStructuredResultV2
+ * object indicating a dynamo error, duplicate record or operator required status.
  */
-export const checkDuplicate = async (
+export const validateStatus = async (
   payload: any,
   origin: WebhookOrigin
 ): Promise<APIGatewayProxyStructuredResultV2 | null> => {
@@ -24,10 +25,29 @@ export const checkDuplicate = async (
     }
   }
 
-  if (response?.Item) {
+  const isDuplicate =
+    response?.Item?.status === WebhookStatus.PROCESSING ||
+    response?.Item?.status === WebhookStatus.COMPLETED
+
+  if (!isDuplicate) {
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'duplicate webhook received' }),
+      body: JSON.stringify({
+        message:
+          'Unable to process webhook: Duplicate Received, either the webhook is already being processed or has been completed.',
+      }),
+    }
+  }
+
+  const operatorRequired =
+    response?.Item?.status === WebhookStatus.OPERATOR_REQUIRED
+
+  if (operatorRequired) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Unabled to process webhook: Operator Required',
+      }),
     }
   }
 
