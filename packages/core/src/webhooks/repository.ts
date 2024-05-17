@@ -103,7 +103,7 @@ export class WebhookRepository {
   static async setProcessingStatus(keys: { PK: string; created_at: string }) {
     const input: Omit<UpdateCommandInput, 'TableName'> = {
       Key: keys,
-      UpdateExpression: 'SET #Status = :StatusValue, retries = retries',
+      UpdateExpression: 'SET #Status = :StatusValue, retries = retries + 1',
       ExpressionAttributeNames: {
         '#Status': 'status',
       },
