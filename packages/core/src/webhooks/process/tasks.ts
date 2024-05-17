@@ -25,6 +25,30 @@ export type ProcessPipelineFunction = (
   input: ProcessPipelineInput
 ) => Promise<ProcessPipelineInput>
 
+export function mapDynamoRecord(record: Record<string, any>, mesageID: string) {
+  const input: ProcessPipelineInput = {
+    key: {
+      PK: record.PK,
+      created_at: record.created_at,
+    },
+    item: {
+      PK: record.PK,
+      created_at: record.created_at,
+      origin: record.origin,
+      event_type: record.event_type,
+      status: record.status as WebhookStatus,
+      retries: 0,
+      payload: record.payload,
+    },
+    itemIdentifier: mesageID,
+    status: WebhookProcessingStatus.CONTINUE,
+  }
+
+  logger.debug({ input }, 'Mapped DynamoDB Record')
+
+  return Promise.resolve(input)
+}
+
 export function mapDynamoStreamRecord(
   record: DynamoDBRecord
 ): Promise<ProcessPipelineInput> {
@@ -78,6 +102,10 @@ export const validateStatus: ProcessPipelineFunction = async args => {
     response?.Item?.status === WebhookStatus.OPERATOR_REQUIRED
 
   if (isDuplicate) {
+    logger.info(
+      { key: args.key },
+      'Webhook cannot be processed: duplicate webhook'
+    )
     return {
       ...args,
       status: WebhookProcessingStatus.DUPLICATE,
@@ -85,13 +113,17 @@ export const validateStatus: ProcessPipelineFunction = async args => {
   }
 
   if (operatorRequired) {
+    logger.info(
+      { key: args.key },
+      'Webhook cannot be processed: operator required'
+    )
     return {
       ...args,
       status: WebhookProcessingStatus.OPERATOR_REQUIRED,
     }
   }
 
-  logger.debug('Validated Webhook Status')
+  logger.debug({ args }, 'Validated Webhook Status')
 
   return args
 }
@@ -106,12 +138,17 @@ export const setProcessing: ProcessPipelineFunction = async (
 ) => {
   if (args.status !== WebhookProcessingStatus.CONTINUE) return args
 
+  logger.debug({ args }, 'Set Processing 1')
+
   const updateResult = await updateWebhookStatus(
     args.key,
     WebhookStatus.PROCESSING
   )
 
   if (updateResult) {
+    logger.error({ key: args.key }, 'Failed to set Webhook Status')
+    logger.debug({ updateResult }, 'Set Processing error')
+
     return {
       ...args,
       status: WebhookProcessingStatus.FAILED,

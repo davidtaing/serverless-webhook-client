@@ -31,7 +31,7 @@ export function StorageStack({ stack }: StackContext) {
 
   const queue = new Queue(stack, 'FailedWebhooksQueue', {
     consumer: {
-      function: 'packages/functions/src/process-failed-webhook.handler',
+      function: { handler: 'packages/functions/src/process-via-sqs.handler' },
       cdk: {
         eventSource: {
           reportBatchItemFailures: true,
@@ -40,7 +40,10 @@ export function StorageStack({ stack }: StackContext) {
     },
     cdk: {
       queue: {
-        deliveryDelay: Duration.seconds(900),
+        // 15 mins should be reasonable values in a real-world scenario
+        // these values are set to 5 seconds for testing purposes
+        deliveryDelay: Duration.seconds(5),
+        visibilityTimeout: Duration.seconds(5),
         deadLetterQueue: {
           queue: deadLetterQueue.cdk.queue,
           maxReceiveCount: 2,
@@ -50,7 +53,7 @@ export function StorageStack({ stack }: StackContext) {
   })
 
   table.bindToConsumer('process-webhook', [table, queue])
-  queue.bind([table])
+  queue.bind([table, queue])
 
   return {
     table,

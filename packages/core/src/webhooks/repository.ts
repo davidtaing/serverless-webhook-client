@@ -1,4 +1,6 @@
 import {
+  BatchGetCommand,
+  BatchGetCommandInput,
   GetCommand,
   GetCommandInput,
   PutCommand,
@@ -9,8 +11,9 @@ import {
 import to from 'await-to-js'
 
 import { docClient } from '../database'
-import { WebhookStatus } from './types'
+import { WebhookKey, WebhookStatus } from './types'
 import { Table } from 'sst/node/table'
+import { logger } from '../logger'
 
 export class WebhookRepository {
   static name = Table.Webhooks.tableName
@@ -33,6 +36,21 @@ export class WebhookRepository {
     return WebhookRepository.get(input)
   }
 
+  static async batchGetByKeys(keys: WebhookKey[]) {
+    const input: BatchGetCommandInput = {
+      RequestItems: {
+        [WebhookRepository.name]: {
+          Keys: keys,
+          ConsistentRead: true,
+        },
+      },
+    }
+
+    const command = new BatchGetCommand(input)
+    const [error, response] = await to(docClient.send(command))
+    return { error, response }
+  }
+
   static async put(input: Omit<PutCommandInput, 'TableName'>) {
     const putCommand = new PutCommand({
       ...input,
@@ -47,7 +65,8 @@ export class WebhookRepository {
       ...input,
       TableName: WebhookRepository.name,
     })
-    const [error] = await to(docClient.send(updateCommand))
+    const [error, response] = await to(docClient.send(updateCommand))
+
     return error
   }
 
@@ -84,18 +103,17 @@ export class WebhookRepository {
   static async setProcessingStatus(keys: { PK: string; created_at: string }) {
     const input: Omit<UpdateCommandInput, 'TableName'> = {
       Key: keys,
-      UpdateExpression:
-        'SET #Status = :StatusValue, #Retries = #Retries + :IncrementValue',
+      UpdateExpression: 'SET #Status = :StatusValue, retries = retries',
       ExpressionAttributeNames: {
         '#Status': 'status',
-        '#Retries': 'retries',
       },
       ExpressionAttributeValues: {
         ':StatusValue': WebhookStatus.PROCESSING,
-        ':IncrementValue': 1,
       },
       ReturnValues: 'NONE',
     }
+
+    logger.debug({ keys }, 'Setting Webhook to Processing')
 
     return WebhookRepository.update(input)
   }
