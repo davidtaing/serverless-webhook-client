@@ -25,30 +25,6 @@ export type ProcessPipelineFunction = (
   input: ProcessPipelineInput
 ) => Promise<ProcessPipelineInput>
 
-export function mapDynamoRecord(record: Record<string, any>, mesageID: string) {
-  const input: ProcessPipelineInput = {
-    key: {
-      PK: record.PK,
-      created_at: record.created_at,
-    },
-    item: {
-      PK: record.PK,
-      created_at: record.created_at,
-      origin: record.origin,
-      event_type: record.event_type,
-      status: record.status as WebhookStatus,
-      retries: 0,
-      payload: record.payload,
-    },
-    itemIdentifier: mesageID,
-    status: WebhookProcessingStatus.CONTINUE,
-  }
-
-  logger.debug({ input }, 'Mapped DynamoDB Record')
-
-  return Promise.resolve(input)
-}
-
 export function mapDynamoStreamRecord(
   record: DynamoDBRecord
 ): Promise<ProcessPipelineInput> {
