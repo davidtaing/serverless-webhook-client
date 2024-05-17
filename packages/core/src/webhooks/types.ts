@@ -26,3 +26,8 @@ export type Webhook = {
   retries: number
   payload: any
 }
+
+export type WebhookKey = {
+  PK: string
+  created_at: string
+}

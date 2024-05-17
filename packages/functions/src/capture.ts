@@ -4,6 +4,7 @@ import {
   capture,
   validateStatus,
   determineOrigin,
+  extractCompositeKeys,
 } from '@serverless-webhook-client/core/webhooks/capture'
 
 /**
@@ -38,8 +39,8 @@ export const handler: APIGatewayProxyHandlerV2 = async event => {
   // Note:
   // We should add handle validation of the payload and verify sender here.
   // But since this is a proof of concept, we'll skip that for now.
-
-  const invalidStatus = await validateStatus(payload, origin)
+  const key = extractCompositeKeys[origin](payload)
+  const invalidStatus = await validateStatus(key)
 
   // early exit on duplicates or Dynamo errors
   if (invalidStatus !== null) {

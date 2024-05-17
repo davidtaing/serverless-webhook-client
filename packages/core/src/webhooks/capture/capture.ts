@@ -1,5 +1,5 @@
 import { APIGatewayProxyStructuredResultV2 } from 'aws-lambda'
-import { WebhookOrigin, WebhookStatus } from '../types'
+import { WebhookKey, WebhookOrigin, WebhookStatus } from '../types'
 import { extractCompositeKeys, mappers } from './utils'
 import { WebhookRepository } from '../repository'
 
@@ -11,11 +11,8 @@ import { WebhookRepository } from '../repository'
  * object indicating a dynamo error, duplicate record or operator required status.
  */
 export const validateStatus = async (
-  payload: any,
-  origin: WebhookOrigin
+  key: WebhookKey
 ): Promise<APIGatewayProxyStructuredResultV2 | null> => {
-  const key = extractCompositeKeys[origin](payload)
-
   const { error, response } = await WebhookRepository.getByKey(key)
 
   if (error) {
