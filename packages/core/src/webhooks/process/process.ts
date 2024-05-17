@@ -12,8 +12,7 @@ export async function doSomeWork(
 ): Promise<true | Error> {
   logger.info({ key }, 'Processing webhook')
 
-  // const ERROR_RATE = 0.2 // arbitrary error rate
-  const ERROR_RATE = 1 // arbitrary error rate
+  const ERROR_RATE = 0.5 // arbitrary error rate
   const BASE_DELAY_MS = 100
   const delay = BASE_DELAY_MS + Math.floor(Math.random() * 100)
 
