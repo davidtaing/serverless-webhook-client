@@ -40,7 +40,7 @@ export function StorageStack({ stack }: StackContext) {
     },
     cdk: {
       queue: {
-        // 15 mins should be reasonable values in a real-world scenario
+        // 15 mins could be reasonable values in a real-world scenario
         // these values are set to 5 seconds for testing purposes
         deliveryDelay: Duration.seconds(5),
         visibilityTimeout: Duration.seconds(5),
@@ -48,6 +48,8 @@ export function StorageStack({ stack }: StackContext) {
           queue: deadLetterQueue.cdk.queue,
           maxReceiveCount: 2,
         },
+        // long poll for SQS messages since this is not time sensitive
+        receiveMessageWaitTime: Duration.seconds(20),
       },
     },
   })
