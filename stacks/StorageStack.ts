@@ -2,20 +2,18 @@ import { Queue, StackContext, Table } from 'sst/constructs'
 import { Duration } from 'aws-cdk-lib/core'
 
 export function StorageStack({ stack }: StackContext) {
-  const table = new Table(stack, 'Webhooks', {
+  const table = new Table(stack, 'Webhooks2', {
     fields: {
       PK: 'string',
+      SK: 'string',
+      payload: 'string',
       created_at: 'string',
       origin: 'string',
       event_type: 'string',
       status: 'string',
       retries: 'number',
-      payload: 'string',
     },
-    primaryIndex: { partitionKey: 'PK', sortKey: 'created_at' },
-    globalIndexes: {
-      OriginIndex: { partitionKey: 'origin', sortKey: 'created_at' },
-    },
+    primaryIndex: { partitionKey: 'PK', sortKey: 'SK' },
     stream: 'new_image',
     consumers: {
       'process-webhook': {
