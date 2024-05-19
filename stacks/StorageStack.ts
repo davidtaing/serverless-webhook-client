@@ -2,7 +2,7 @@ import { Queue, StackContext, Table } from 'sst/constructs'
 import { Duration } from 'aws-cdk-lib/core'
 
 export function StorageStack({ stack }: StackContext) {
-  const table = new Table(stack, 'Webhooks2', {
+  const table = new Table(stack, 'Webhooks', {
     fields: {
       PK: 'string',
       SK: 'string',
