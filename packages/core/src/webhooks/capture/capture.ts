@@ -1,5 +1,5 @@
 import { APIGatewayProxyStructuredResultV2 } from 'aws-lambda'
-import { WebhookKey, WebhookOrigin, WebhookStatus } from '../types'
+import { WebhookKey, WebhookOrigin } from '../types'
 import { extractCompositeKeys, mappers } from './utils'
 import { WebhookRepository } from '../repository'
 import { logger } from '../../logger'

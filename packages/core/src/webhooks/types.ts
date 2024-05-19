@@ -1,14 +1,32 @@
-export type WebhookOrigin = 'bigcommerce' | 'stripe'
+export type WebhookKey = Pick<Webhook, 'PK' | 'SK'>
 
-export type WebhookStatus =
-  | 'received'
-  | 'processing'
-  | 'failed'
-  | 'completed'
-  | 'operator_required'
+export type Webhook = {
+  PK: string
+  SK: string
+  created_at: string
+  origin: 'bigcommerce' | 'stripe'
+  event_type: string
+  payload: any
+}
 
-export const WebhookStatus: {
-  [key in Uppercase<WebhookStatus>]: Lowercase<key>
+export type WebhookOrigin = Webhook['origin']
+
+export type WebhookStatus = {
+  PK: string
+  SK: string
+  status:
+    | 'received'
+    | 'processing'
+    | 'failed'
+    | 'completed'
+    | 'operator_required'
+  retries: number
+}
+
+export type WebhookStatusValue = WebhookStatus['status']
+
+export const WebhookStatusValues: {
+  [key in Uppercase<WebhookStatusValue>]: Lowercase<key>
 } = {
   RECEIVED: 'received',
   PROCESSING: 'processing',
@@ -16,18 +34,3 @@ export const WebhookStatus: {
   COMPLETED: 'completed',
   OPERATOR_REQUIRED: 'operator_required',
 } as const
-
-export type Webhook = {
-  PK: string
-  created_at: string
-  origin: string
-  event_type: string
-  status: WebhookStatus
-  retries: number
-  payload: any
-}
-
-export type WebhookKey = {
-  PK: string
-  created_at: string
-}

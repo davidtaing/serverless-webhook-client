@@ -1,7 +1,7 @@
 import to from 'await-to-js'
 import { logger } from '../../logger'
 import { WebhookRepository } from '../repository'
-import { WebhookKey, Webhook, WebhookStatus } from '../types'
+import { WebhookKey, Webhook, WebhookStatusValues } from '../types'
 import { WebhookProcessingStatus } from './types'
 import { SendMessageCommandInput } from '@aws-sdk/client-sqs'
 import { sendSQSMessage } from '../../queue'
@@ -38,15 +38,14 @@ export function mapDynamoStreamRecord(
   const input: ProcessPipelineInput = {
     key: {
       PK: keys.PK,
-      created_at: keys.created_at,
+      SK: keys.SK,
     },
     item: {
       PK: keys.PK,
+      SK: keys.SK,
       created_at: item.created_at,
       origin: item.origin,
       event_type: item.event_type,
-      status: item.status as WebhookStatus,
-      retries: 0,
       payload: item.payload,
     },
     itemIdentifier: eventID,
@@ -71,11 +70,11 @@ export const validateStatus: ProcessPipelineFunction = async args => {
   }
 
   const isDuplicate =
-    response?.Item?.status === WebhookStatus.PROCESSING ||
-    response?.Item?.status === WebhookStatus.COMPLETED
+    response?.Item?.status === WebhookStatusValues.PROCESSING ||
+    response?.Item?.status === WebhookStatusValues.COMPLETED
 
   const operatorRequired =
-    response?.Item?.status === WebhookStatus.OPERATOR_REQUIRED
+    response?.Item?.status === WebhookStatusValues.OPERATOR_REQUIRED
 
   if (isDuplicate) {
     return {
@@ -108,7 +107,7 @@ export const setProcessing: ProcessPipelineFunction = async (
 
   const updateResult = await updateWebhookStatus(
     args.key,
-    WebhookStatus.PROCESSING
+    WebhookStatusValues.PROCESSING
   )
 
   if (updateResult) {
@@ -146,7 +145,7 @@ export const processWebhook: ProcessPipelineFunction = async (
 }
 
 export const setFinalStatus: ProcessPipelineFunction = async args => {
-  let webhookStatus: WebhookStatus = WebhookStatus.FAILED
+  let webhookStatus: WebhookStatus = WebhookStatusValues.FAILED
 
   switch (args.status) {
     // Early Exits
@@ -154,11 +153,11 @@ export const setFinalStatus: ProcessPipelineFunction = async args => {
     case WebhookProcessingStatus.DUPLICATE:
       return args
     case WebhookProcessingStatus.CONTINUE:
-      webhookStatus = WebhookStatus.COMPLETED
+      webhookStatus = WebhookStatusValues.COMPLETED
       break
     case WebhookProcessingStatus.FAILED:
     default:
-      webhookStatus = WebhookStatus.FAILED
+      webhookStatus = WebhookStatusValues.FAILED
   }
 
   const updateStatusError = await updateWebhookStatus(args.key, webhookStatus)
@@ -188,7 +187,7 @@ export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
       },
       created_at: {
         DataType: 'String',
-        StringValue: args.key.created_at,
+        StringValue: args.key.SK,
       },
       status: {
         DataType: 'String',

@@ -11,9 +11,8 @@ import {
 import to from 'await-to-js'
 
 import { docClient } from '../database'
-import { WebhookKey, WebhookStatus } from './types'
+import { WebhookKey, WebhookStatusValue, WebhookStatusValues } from './types'
 import { Table } from 'sst/node/table'
-import { logger } from '../logger'
 
 export class WebhookRepository {
   static name = Table.Webhooks.tableName
@@ -27,7 +26,7 @@ export class WebhookRepository {
     return { error, response }
   }
 
-  static async getByKey(key: { PK: string; created_at: string }) {
+  static async getByKey(key: WebhookKey) {
     const input: GetCommandInput = {
       TableName: WebhookRepository.name,
       Key: key,
@@ -77,11 +76,8 @@ export class WebhookRepository {
    * @returns error for failed updates, otherwise null
    * @remarks if the status is set to 'processing', the retries count will also be incremented
    */
-  static async updateStatus(
-    keys: { PK: string; created_at: string },
-    status: WebhookStatus
-  ) {
-    if (status === WebhookStatus.PROCESSING) {
+  static async updateStatus(keys: WebhookKey, status: WebhookStatusValue) {
+    if (status === WebhookStatusValues.PROCESSING) {
       return WebhookRepository.setProcessingStatus(keys)
     }
 
@@ -100,7 +96,7 @@ export class WebhookRepository {
     return WebhookRepository.update(input)
   }
 
-  static async setProcessingStatus(keys: { PK: string; created_at: string }) {
+  static async setProcessingStatus(keys: WebhookKey) {
     const input: Omit<UpdateCommandInput, 'TableName'> = {
       Key: keys,
       UpdateExpression: 'SET #Status = :StatusValue, retries = retries + 1',
@@ -108,7 +104,7 @@ export class WebhookRepository {
         '#Status': 'status',
       },
       ExpressionAttributeValues: {
-        ':StatusValue': WebhookStatus.PROCESSING,
+        ':StatusValue': WebhookStatusValues.PROCESSING,
       },
       ReturnValues: 'NONE',
     }

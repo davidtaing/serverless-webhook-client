@@ -1,6 +1,6 @@
 import { logger } from '../../logger'
 import { WebhookRepository } from '../repository'
-import { WebhookKey, Webhook, WebhookStatus } from '../types'
+import { WebhookKey, Webhook, WebhookStatusValue } from '../types'
 
 /**
  * Simulates processing by adding an artificial delay along with random errors.
@@ -31,7 +31,7 @@ export async function doSomeWork(
 
 export async function updateWebhookStatus(
   key: WebhookKey,
-  status: WebhookStatus
+  status: WebhookStatusValue
 ): Promise<Error | null> {
   return WebhookRepository.updateStatus(key, status)
 }

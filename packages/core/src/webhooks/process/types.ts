@@ -1,4 +1,8 @@
-import { WebhookStatus } from '../types'
+import {
+  WebhookStatus,
+  WebhookStatusValue,
+  WebhookStatusValues,
+} from '../types'
 
 /**
  * Adds 'duplicate' and 'continue' statuses to the WebhookStatus type.
@@ -6,12 +10,15 @@ import { WebhookStatus } from '../types'
  * @field DUPLICATE - Signals that webhook may already be processing or already be completed
  * @field CONTINUE - Signals that the next stage can continue processing the event
  */
-export type WebhookProcessingStatus = WebhookStatus | 'duplicate' | 'continue'
+export type WebhookProcessingStatus =
+  | WebhookStatusValue
+  | 'duplicate'
+  | 'continue'
 
 export const WebhookProcessingStatus: {
   [key in Uppercase<WebhookProcessingStatus>]: Lowercase<key>
 } = {
-  ...WebhookStatus,
+  ...WebhookStatusValues,
   DUPLICATE: 'duplicate',
   CONTINUE: 'continue',
 } as const
