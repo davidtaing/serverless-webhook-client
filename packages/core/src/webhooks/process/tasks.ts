@@ -1,4 +1,3 @@
-import to from 'await-to-js'
 import { logger } from '../../logger'
 import { WebhookRepository } from '../repository'
 import {
@@ -18,6 +17,7 @@ import {
 import { unmarshall } from '@aws-sdk/util-dynamodb'
 import { AttributeValue } from '@aws-sdk/client-dynamodb'
 import { doSomeWork } from './process'
+import { to } from '../../utils'
 
 export type ProcessPipelineInput = {
   key: WebhookKey
@@ -96,7 +96,7 @@ export const validateStatus: ProcessPipelineFunction = async args => {
     }
   }
 
-  logger.info({ PK: args.key.PK }, 'Validated Webhook Status')
+  logger.info({ key: args.key }, 'Validated Webhook Status')
 
   return args
 }
@@ -111,13 +111,12 @@ export const setProcessing: ProcessPipelineFunction = async (
 ) => {
   if (args.status !== WebhookProcessingStatus.CONTINUE) return args
 
-  const updateResult = await WebhookRepository.setStatusToProcessing(
+  const { error, response } = await WebhookRepository.setStatusToProcessing(
     args.key.PK
   )
 
-  if (updateResult) {
-    logger.error({ PK: args.key.PK }, 'Failed to set Webhook Status')
-    logger.debug({ updateResult }, 'Set Processing error')
+  if (error) {
+    logger.error({ key: args.key }, 'Failed to set Webhook Status')
 
     return {
       ...args,
@@ -125,7 +124,7 @@ export const setProcessing: ProcessPipelineFunction = async (
     }
   }
 
-  logger.info({ PK: args.key.PK }, 'Set Webhook Status to Processing')
+  logger.info({ key: args.key }, 'Set Webhook Status to Processing')
 
   return args
 }
@@ -135,50 +134,51 @@ export const processWebhook: ProcessPipelineFunction = async (
 ) => {
   if (args.status !== WebhookProcessingStatus.CONTINUE) return args
 
-  const [error] = await to(doSomeWork(args.key, args.item))
+  const { error } = await to(doSomeWork(args.item))
   if (error) {
-    logger.error({ PK: args.key.PK }, 'Failed to process Webhook')
+    logger.error({ key: args.key }, 'Failed to process Webhook')
     return {
       ...args,
       status: WebhookProcessingStatus.FAILED,
     }
   }
 
-  logger.info('Processed Webhook')
+  logger.info('Successfully Processed Webhook')
 
   return args
 }
 
 export const setFinalStatus: ProcessPipelineFunction = async args => {
-  let webhookStatus: WebhookStatusValue = WebhookStatusValues.FAILED
+  const shouldEarlyExit =
+    args.status === WebhookProcessingStatus.DUPLICATE ||
+    args.status === WebhookProcessingStatus.OPERATOR_REQUIRED
 
-  switch (args.status) {
-    // Early Exits
-    case WebhookProcessingStatus.OPERATOR_REQUIRED:
-    case WebhookProcessingStatus.DUPLICATE:
-      return args
-    case WebhookProcessingStatus.CONTINUE:
-      webhookStatus = WebhookStatusValues.COMPLETED
-      break
-    case WebhookProcessingStatus.FAILED:
-    default:
-      webhookStatus = WebhookStatusValues.FAILED
+  if (shouldEarlyExit) {
+    return args
   }
 
-  const updateStatusError = await WebhookRepository.setStatus(
+  let status: WebhookStatusValue =
+    args.status === WebhookProcessingStatus.CONTINUE
+      ? WebhookStatusValues.COMPLETED
+      : WebhookStatusValues.FAILED
+
+  const { error, response } = await WebhookRepository.setStatus(
     args.key.PK,
-    webhookStatus
+    status
   )
 
-  if (updateStatusError) {
+  if (error) {
     return {
       ...args,
       status: WebhookProcessingStatus.FAILED,
-      result: updateStatusError,
+      result: error,
     }
   }
 
-  logger.info({ status: webhookStatus }, 'Set Final Webhook Status')
+  logger.info(
+    { key: args.key, status },
+    `Set Final Webhook Status to ${status}`
+  )
 
   return args
 }
@@ -206,23 +206,18 @@ export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
 
   const { error, sendResult } = await sendSQSMessage(messageInput)
 
-  logger.debug({ error, sendResult }, 'SQS Send Result')
-
   if (error) {
-    logger.error({ PK: args.key.PK, error }, 'Failed to send SQS message')
+    logger.error({ key: args.key, error }, 'Failed to send SQS message')
     return { ...args, status: WebhookProcessingStatus.FAILED }
   }
 
-  logger.info(
-    { PK: args.key.PK, sendResult },
-    'Published webhook failure to SQS'
-  )
+  logger.info({ key: args.key, sendResult }, 'Published webhook failure to SQS')
 
   return args
 }
 
 export const logResults: ProcessPipelineFunction = async args => {
-  const logPayload = { PK: args.key.PK, status: args.status }
+  const logPayload = { key: args.key, status: args.status }
   if (args.status === WebhookProcessingStatus.FAILED) {
     logger.error(logPayload, 'Webhook Processing Failed')
   } else {
