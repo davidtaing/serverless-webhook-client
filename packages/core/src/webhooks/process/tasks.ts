@@ -22,7 +22,7 @@ import { doSomeWork } from './process'
 export type ProcessPipelineInput = {
   key: WebhookKey
   item: Webhook
-  itemIdentifier: string
+  batchItemIdentifier: string
   status: WebhookProcessingStatus
   rawStreamRecord: string
 }
@@ -32,11 +32,11 @@ export type ProcessPipelineFunction = (
 ) => Promise<ProcessPipelineInput>
 
 export function mapStreamRecord(
-  record: DynamoDBRecord['dynamodb'],
-  itemIdentifier: string
+  streamRecord: DynamoDBRecord['dynamodb'],
+  batchItemIdentifier: string
 ): Promise<ProcessPipelineInput> {
-  const rawItem = record?.NewImage as Record<string, AttributeValue>
-  const rawKeys = record?.Keys as Record<string, AttributeValue>
+  const rawItem = streamRecord?.NewImage as Record<string, AttributeValue>
+  const rawKeys = streamRecord?.Keys as Record<string, AttributeValue>
 
   const keys = unmarshall(rawKeys)
   const item = unmarshall(rawItem)
@@ -53,9 +53,9 @@ export function mapStreamRecord(
       type: item.event_type,
       payload: item.payload,
     },
-    itemIdentifier,
+    batchItemIdentifier,
     status: WebhookProcessingStatus.CONTINUE,
-    rawStreamRecord: JSON.stringify(record),
+    rawStreamRecord: JSON.stringify(streamRecord),
   }
 
   logger.debug({ input }, 'Mapped DynamoDB Stream Record')
@@ -226,7 +226,7 @@ export const logResults: ProcessPipelineFunction = async args => {
   if (args.status === WebhookProcessingStatus.FAILED) {
     logger.error(logPayload, 'Webhook Processing Failed')
   } else {
-    logger.error(logPayload, 'Webhook Processing Result')
+    logger.info(logPayload, 'Webhook Processing Result')
   }
 
   return args
@@ -237,7 +237,7 @@ export const buildLambdaResponse = (
 ): DynamoDBBatchItemFailure | SQSBatchItemFailure | null => {
   if (args.status === WebhookProcessingStatus.FAILED) {
     return {
-      itemIdentifier: args.itemIdentifier,
+      itemIdentifier: args.batchItemIdentifier,
     }
   }
 

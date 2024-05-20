@@ -1,4 +1,4 @@
-import { SQSBatchItemFailure, SQSHandler } from 'aws-lambda'
+import { SQSBatchItemFailure, SQSHandler, SQSRecord } from 'aws-lambda'
 
 import {
   buildLambdaResponse,
@@ -11,15 +11,9 @@ import {
 } from '@serverless-webhook-client/core/webhooks/process'
 
 export const handler: SQSHandler = async event => {
-  const records = event.Records.map(record => ({
-    messageID: record.messageId,
-    dynamodb: JSON.parse(
-      record.messageAttributes.raw_stream_record.stringValue!
-    ),
-  }))
-
-  const promises = records?.map(record =>
-    mapStreamRecord(record.dynamodb, record.messageID)
+  const promises = event.Records?.map(record =>
+    sqsAdapter(record)
+      .then(record => mapStreamRecord(record.streamRecord, record.messageID))
       .then(validateStatus)
       .then(setProcessing)
       .then(processWebhook)
@@ -34,4 +28,13 @@ export const handler: SQSHandler = async event => {
   return {
     batchItemFailures: errors,
   }
+}
+
+function sqsAdapter(record: SQSRecord) {
+  return Promise.resolve({
+    messageID: record.messageId,
+    streamRecord: JSON.parse(
+      record.messageAttributes.raw_stream_record.stringValue!
+    ),
+  })
 }

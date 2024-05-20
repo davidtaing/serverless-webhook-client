@@ -1,8 +1,4 @@
-import {
-  WebhookStatus,
-  WebhookStatusValue,
-  WebhookStatusValues,
-} from '../types'
+import { WebhookStatusValue, WebhookStatusValues } from '../types'
 
 /**
  * Adds 'duplicate' and 'continue' statuses to the WebhookStatus type.
