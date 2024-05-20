@@ -12,7 +12,8 @@ export function ApiStack({ stack }: StackContext) {
       },
     },
     routes: {
-      'POST /webhooks/bigcommerce': 'packages/functions/src/capture.handler',
+      'POST /webhooks/bigcommerce':
+        'packages/functions/src/capture-webhooks.handler',
     },
   })
 

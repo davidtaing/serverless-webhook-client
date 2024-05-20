@@ -19,7 +19,7 @@ export function StorageStack({ stack }: StackContext) {
     consumers: {
       'process-webhook': {
         function: {
-          handler: 'packages/functions/src/process.handler',
+          handler: 'packages/functions/src/dynamo-process-webhooks.handler',
         },
         filters: [
           {
@@ -35,7 +35,9 @@ export function StorageStack({ stack }: StackContext) {
 
   const queue = new Queue(stack, 'FailedWebhooksQueue', {
     consumer: {
-      function: { handler: 'packages/functions/src/process-via-sqs.handler' },
+      function: {
+        handler: 'packages/functions/src/sqs-process-webhooks.handler',
+      },
       cdk: {
         eventSource: {
           reportBatchItemFailures: true,
