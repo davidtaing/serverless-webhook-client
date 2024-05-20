@@ -1,19 +1,18 @@
-export type WebhookKey = Pick<Webhook, 'PK' | 'SK'>
+export type EntityKey = { PK: string; SK: string }
+export type WebhookKey = EntityKey
 
 export type Webhook = {
-  PK: string
-  SK: string
-  created_at: string
+  id: string
+  created: string
   origin: 'bigcommerce' | 'stripe'
-  event_type: string
+  type: string
   payload: any
 }
 
 export type WebhookOrigin = Webhook['origin']
 
 export type WebhookStatus = {
-  PK: string
-  SK: string
+  id: string
   status:
     | 'received'
     | 'processing'

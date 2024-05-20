@@ -87,6 +87,7 @@ Also, I like the thesis of "Storage is cheap, compute isn't". I think this has s
 ```js
 const webhook = {
   PK: 'WH#57f08d25-a733-453a-be49-8caf04df5169',
+  id: '57f08d25-a733-453a-be49-8caf04df5169',
   SK: 'WEBHOOK',
   id: '57f08d25-a733-453a-be49-8caf04df5169',
   origin: 'stripe',
@@ -97,6 +98,7 @@ const webhook = {
 
 const webhookStatus = {
   PK: 'WH#57f08d25-a733-453a-be49-8caf04df5169',
+  id: '57f08d25-a733-453a-be49-8caf04df5169'
   SK: 'STATUS',
   id: '57f08d25-a733-453a-be49-8caf04df5169'
   status: 'completed',
@@ -112,7 +114,7 @@ Note: schema is subject to change.
 
 | Access Patterns             | Target     | Parameters   | Notes                                                                          |
 | --------------------------- | ---------- | ------------ | ------------------------------------------------------------------------------ |
-| Save Webhook                | Main Table | - Webhook ID | BatchWriteItem with two writes: ><br>- Webhook <br>- Webhook Status            |
+| Capture Webhook             | Main Table | - Webhook ID | Transaction with Two Operations: <br>- Put Webhook <br>- Put Webhook Status    |
 | Get Webhook Status          | Main Table | - Webhook ID | Get Operation                                                                  |
 | Set Webhook Status          | Main Table | - Webhook ID | Update Operation                                                               |
 | Set Webhook to `processing` | Main Table | - Webhook ID | Update Operation <br> - set `status` to `processing` <br>- increment `retries` |

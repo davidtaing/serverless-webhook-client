@@ -1,7 +1,12 @@
 import to from 'await-to-js'
 import { logger } from '../../logger'
 import { WebhookRepository } from '../repository'
-import { WebhookKey, Webhook, WebhookStatusValues } from '../types'
+import {
+  WebhookKey,
+  Webhook,
+  WebhookStatusValues,
+  WebhookStatusValue,
+} from '../types'
 import { WebhookProcessingStatus } from './types'
 import { SendMessageCommandInput } from '@aws-sdk/client-sqs'
 import { sendSQSMessage } from '../../queue'
@@ -12,25 +17,26 @@ import {
 } from 'aws-lambda'
 import { unmarshall } from '@aws-sdk/util-dynamodb'
 import { AttributeValue } from '@aws-sdk/client-dynamodb'
-import { doSomeWork, updateWebhookStatus } from './process'
+import { doSomeWork } from './process'
 
 export type ProcessPipelineInput = {
   key: WebhookKey
   item: Webhook
   itemIdentifier: string
   status: WebhookProcessingStatus
+  rawStreamRecord: string
 }
 
 export type ProcessPipelineFunction = (
   input: ProcessPipelineInput
 ) => Promise<ProcessPipelineInput>
 
-export function mapDynamoStreamRecord(
-  record: DynamoDBRecord
+export function mapStreamRecord(
+  record: DynamoDBRecord['dynamodb'],
+  itemIdentifier: string
 ): Promise<ProcessPipelineInput> {
-  const rawItem = record.dynamodb?.NewImage as Record<string, AttributeValue>
-  const rawKeys = record.dynamodb?.Keys as Record<string, AttributeValue>
-  const eventID = record.eventID!
+  const rawItem = record?.NewImage as Record<string, AttributeValue>
+  const rawKeys = record?.Keys as Record<string, AttributeValue>
 
   const keys = unmarshall(rawKeys)
   const item = unmarshall(rawItem)
@@ -41,15 +47,15 @@ export function mapDynamoStreamRecord(
       SK: keys.SK,
     },
     item: {
-      PK: keys.PK,
-      SK: keys.SK,
-      created_at: item.created_at,
+      id: item.id,
+      created: item.created_at,
       origin: item.origin,
-      event_type: item.event_type,
+      type: item.event_type,
       payload: item.payload,
     },
-    itemIdentifier: eventID,
+    itemIdentifier,
     status: WebhookProcessingStatus.CONTINUE,
+    rawStreamRecord: JSON.stringify(record),
   }
 
   logger.debug({ input }, 'Mapped DynamoDB Stream Record')
@@ -60,7 +66,7 @@ export function mapDynamoStreamRecord(
 export const validateStatus: ProcessPipelineFunction = async args => {
   if (args.status !== WebhookProcessingStatus.CONTINUE) return args
 
-  const { error, response } = await WebhookRepository.getByKey(args.key)
+  const { error, response } = await WebhookRepository.getStatus(args.key.PK)
 
   if (error) {
     return {
@@ -70,11 +76,11 @@ export const validateStatus: ProcessPipelineFunction = async args => {
   }
 
   const isDuplicate =
-    response?.Item?.status === WebhookStatusValues.PROCESSING ||
-    response?.Item?.status === WebhookStatusValues.COMPLETED
+    response?.data?.status === WebhookStatusValues.PROCESSING ||
+    response?.data?.status === WebhookStatusValues.COMPLETED
 
   const operatorRequired =
-    response?.Item?.status === WebhookStatusValues.OPERATOR_REQUIRED
+    response?.data?.status === WebhookStatusValues.OPERATOR_REQUIRED
 
   if (isDuplicate) {
     return {
@@ -105,9 +111,8 @@ export const setProcessing: ProcessPipelineFunction = async (
 ) => {
   if (args.status !== WebhookProcessingStatus.CONTINUE) return args
 
-  const updateResult = await updateWebhookStatus(
-    args.key,
-    WebhookStatusValues.PROCESSING
+  const updateResult = await WebhookRepository.setStatusToProcessing(
+    args.key.PK
   )
 
   if (updateResult) {
@@ -145,7 +150,7 @@ export const processWebhook: ProcessPipelineFunction = async (
 }
 
 export const setFinalStatus: ProcessPipelineFunction = async args => {
-  let webhookStatus: WebhookStatus = WebhookStatusValues.FAILED
+  let webhookStatus: WebhookStatusValue = WebhookStatusValues.FAILED
 
   switch (args.status) {
     // Early Exits
@@ -160,7 +165,10 @@ export const setFinalStatus: ProcessPipelineFunction = async args => {
       webhookStatus = WebhookStatusValues.FAILED
   }
 
-  const updateStatusError = await updateWebhookStatus(args.key, webhookStatus)
+  const updateStatusError = await WebhookRepository.setStatus(
+    args.key.PK,
+    webhookStatus
+  )
 
   if (updateStatusError) {
     return {
@@ -176,7 +184,7 @@ export const setFinalStatus: ProcessPipelineFunction = async args => {
 }
 
 export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
-  if (args.status !== WebhookProcessingStatus.COMPLETED) return args
+  if (args.status !== WebhookProcessingStatus.FAILED) return args
 
   const messageInput: Omit<SendMessageCommandInput, 'QueueUrl'> = {
     MessageBody: 'Webhook Failure',
@@ -185,18 +193,20 @@ export const sendFailuresToSQS: ProcessPipelineFunction = async args => {
         DataType: 'String',
         StringValue: args.key.PK,
       },
-      created_at: {
-        DataType: 'String',
-        StringValue: args.key.SK,
-      },
       status: {
         DataType: 'String',
         StringValue: args.status,
+      },
+      raw_stream_record: {
+        DataType: 'String',
+        StringValue: args.rawStreamRecord,
       },
     },
   }
 
   const { error, sendResult } = await sendSQSMessage(messageInput)
+
+  logger.debug({ error, sendResult }, 'SQS Send Result')
 
   if (error) {
     logger.error({ PK: args.key.PK, error }, 'Failed to send SQS message')

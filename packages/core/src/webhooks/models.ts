@@ -1,10 +1,11 @@
 import { Entity, Service } from 'electrodb'
 import { Table } from 'sst/node/table'
 import { docClient } from '../database'
+import { WebhookStatusValues } from './types'
 
 const entityConfig = { table: Table.Webhooks.tableName, client: docClient }
 
-export const WebhookEntity = new Entity(
+const WebhookEntity = new Entity(
   {
     model: {
       version: '1',
@@ -12,12 +13,7 @@ export const WebhookEntity = new Entity(
       service: 'serverless-webhook-client',
     },
     attributes: {
-      PK: {
-        type: 'string',
-        required: true,
-        readOnly: true,
-      },
-      SK: {
+      id: {
         type: 'string',
         required: true,
         readOnly: true,
@@ -27,31 +23,35 @@ export const WebhookEntity = new Entity(
         required: true,
         readOnly: true,
       },
-      event_type: {
+      type: {
         type: 'string',
         required: true,
         readOnly: true,
       },
-      created_at: {
+      created: {
         type: 'string',
         required: true,
         readOnly: true,
       },
       payload: {
-        type: 'string',
+        type: 'any',
         required: true,
         readOnly: true,
       },
     },
     indexes: {
-      primary: {
+      webhook: {
         pk: {
           field: 'PK',
-          composite: [],
+          composite: ['id'],
+          casing: 'upper',
+          template: 'WH#${id}',
         },
         sk: {
           field: 'SK',
           composite: [],
+          casing: 'upper',
+          template: 'WEBHOOK',
         },
       },
     },
@@ -59,20 +59,15 @@ export const WebhookEntity = new Entity(
   entityConfig
 )
 
-export const WebhookStatusEntity = new Entity(
+const WebhookStatusEntity = new Entity(
   {
     model: {
       version: '1',
-      entity: 'webhook',
+      entity: 'webhookStatus',
       service: 'serverless-webhook-client',
     },
     attributes: {
-      PK: {
-        type: 'string',
-        required: true,
-        readOnly: true,
-      },
-      SK: {
+      id: {
         type: 'string',
         required: true,
         readOnly: true,
@@ -80,21 +75,27 @@ export const WebhookStatusEntity = new Entity(
       status: {
         type: 'string',
         required: true,
+        default: WebhookStatusValues.RECEIVED,
       },
       retries: {
         type: 'number',
         required: true,
+        default: 0,
       },
     },
     indexes: {
-      primary: {
+      status: {
         pk: {
           field: 'PK',
-          composite: [],
+          composite: ['id'],
+          casing: 'upper',
+          template: 'WH#${id}',
         },
         sk: {
           field: 'SK',
           composite: [],
+          casing: 'upper',
+          template: 'STATUS',
         },
       },
     },
@@ -104,8 +105,8 @@ export const WebhookStatusEntity = new Entity(
 
 export const WebhookService = new Service(
   {
-    webhook: WebhookEntity,
-    status: WebhookStatusEntity,
+    webhooks: WebhookEntity,
+    statuses: WebhookStatusEntity,
   },
   entityConfig
 )

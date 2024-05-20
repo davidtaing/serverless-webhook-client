@@ -1,5 +1,5 @@
-import { WebhookOrigin } from '../types'
-import { ExtractCompositeKeys, Mappers } from './types'
+import { Webhook, WebhookOrigin } from '../types'
+import { ExtractCompositeKeys, Mappers, WebhookAdapterFunction } from './types'
 
 /**
  * Determines the origin of the webhook based on the URI path.
@@ -19,22 +19,14 @@ export function determineOrigin(
   }
 }
 
-/**
- * Collections of mappers that transform webhooks from multiple providers to our DynamoDB schema.
- */
-export const mappers: Mappers = {
-  bigcommerce: bigcommerceWebhookMapper,
-  stripe: stripeWebhookMapper,
-} as const
-
 export const extractCompositeKeys: ExtractCompositeKeys = {
   bigcommerce: payload => ({
-    PK: payload.hash,
-    created_at: new Date(payload.created_at * 1000).toISOString(),
+    PK: `WH#${payload.hash}`,
+    SK: `WEBHOOK`,
   }),
   stripe: payload => ({
-    PK: payload.id,
-    created_at: new Date(payload.created_at * 1000).toISOString(),
+    PK: `WH#${payload.id}`,
+    SK: `WEBHOOK`,
   }),
 } as const
 
@@ -43,14 +35,13 @@ export const extractCompositeKeys: ExtractCompositeKeys = {
  * @param payload - The BigCommerce webhook payload.
  * @returns The mapped payload.
  */
-export function bigcommerceWebhookMapper(payload: any) {
+export const bigcommerceWebhookMapper: WebhookAdapterFunction = payload => {
   return {
-    ...extractCompositeKeys['bigcommerce'](payload),
+    id: payload.hash,
     origin: 'bigcommerce',
-    event_type: payload.scope,
-    status: 'received',
+    type: payload.scope,
+    created: new Date(payload.created_at * 1000).toISOString(),
     payload,
-    retries: 0,
   }
 }
 
@@ -59,13 +50,20 @@ export function bigcommerceWebhookMapper(payload: any) {
  * @param payload - The Stripe webhook payload.
  * @returns The mapped payload.
  */
-export function stripeWebhookMapper(payload: any) {
+export const stripeWebhookMapper: WebhookAdapterFunction = (payload: any) => {
   return {
-    ...extractCompositeKeys['stripe'](payload),
+    id: payload.id,
     origin: 'stripe',
-    event_type: payload.type,
-    status: 'received',
+    type: payload.type,
+    created: new Date(payload.created_at * 1000).toISOString(),
     payload,
-    retries: 0,
   }
 }
+
+/**
+ * Collections of mappers that transform webhooks from multiple providers to our DynamoDB schema.
+ */
+export const mappers: Mappers = {
+  bigcommerce: bigcommerceWebhookMapper,
+  stripe: stripeWebhookMapper,
+} as const

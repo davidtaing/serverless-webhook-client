@@ -1,8 +1,7 @@
 import { APIGatewayProxyStructuredResultV2 } from 'aws-lambda'
 import { WebhookKey, WebhookOrigin } from '../types'
-import { extractCompositeKeys, mappers } from './utils'
+import { mappers } from './utils'
 import { WebhookRepository } from '../repository'
-import { logger } from '../../logger'
 
 /**
  * Validates the status of a webhook payload.
@@ -47,11 +46,9 @@ export const capture = async (
   payload: any,
   origin: WebhookOrigin
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const input = {
-    Item: mappers[origin](payload),
-  }
+  const input = mappers[origin](payload)
 
-  const { error, response } = await WebhookRepository.put(input)
+  const { error, response } = await WebhookRepository.capture(input)
 
   if (error) {
     return {

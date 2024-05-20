@@ -1,114 +1,70 @@
-import {
-  BatchGetCommand,
-  BatchGetCommandInput,
-  GetCommand,
-  GetCommandInput,
-  PutCommand,
-  PutCommandInput,
-  UpdateCommand,
-  UpdateCommandInput,
-} from '@aws-sdk/lib-dynamodb'
 import to from 'await-to-js'
 
-import { docClient } from '../database'
-import { WebhookKey, WebhookStatusValue, WebhookStatusValues } from './types'
-import { Table } from 'sst/node/table'
+import { Webhook, WebhookStatusValue, WebhookStatusValues } from './types'
+import { WebhookService } from './models'
 
 export class WebhookRepository {
-  static name = Table.Webhooks.tableName
+  /**
+   * Writes immutable data to a Webhook entity record, and mutable data to a
+   * WebhookStatus entity record.
+   * @param webhook
+   * @remarks should consume 4 WCU
+   */
+  static async capture(webhook: Webhook) {
+    const [error, response] = await to(
+      WebhookService.transaction
+        .write(({ webhooks, statuses }) => [
+          webhooks.put(webhook).commit(),
+          statuses
+            .put({
+              id: webhook.id,
+              status: 'received',
+              retries: 0,
+            })
+            .commit(),
+        ])
+        .go()
+    )
 
-  static async get(input: Omit<GetCommandInput, 'TableName'>) {
-    const getCommand = new GetCommand({
-      ...input,
-      TableName: WebhookRepository.name,
-    })
-    const [error, response] = await to(docClient.send(getCommand))
     return { error, response }
   }
 
-  static async getByKey(key: WebhookKey) {
-    const input: GetCommandInput = {
-      TableName: WebhookRepository.name,
-      Key: key,
-    }
+  static async getStatus(id: Webhook['id']) {
+    const [error, response] = await to(
+      WebhookService.entities.statuses.get({ id }).go()
+    )
 
-    return WebhookRepository.get(input)
-  }
-
-  static async batchGetByKeys(keys: WebhookKey[]) {
-    const input: BatchGetCommandInput = {
-      RequestItems: {
-        [WebhookRepository.name]: {
-          Keys: keys,
-          ConsistentRead: true,
-        },
-      },
-    }
-
-    const command = new BatchGetCommand(input)
-    const [error, response] = await to(docClient.send(command))
     return { error, response }
-  }
-
-  static async put(input: Omit<PutCommandInput, 'TableName'>) {
-    const putCommand = new PutCommand({
-      ...input,
-      TableName: WebhookRepository.name,
-    })
-    const [error, response] = await to(docClient.send(putCommand))
-    return { error, response }
-  }
-
-  static async update(input: Omit<UpdateCommandInput, 'TableName'>) {
-    const updateCommand = new UpdateCommand({
-      ...input,
-      TableName: WebhookRepository.name,
-    })
-    const [error, response] = await to(docClient.send(updateCommand))
-
-    return error
   }
 
   /**
-   *
-   * @param keys Composite key PK and created_at (SK)
-   * @param status New status to update the webhook to
-   * @returns error for failed updates, otherwise null
-   * @remarks if the status is set to 'processing', the retries count will also be incremented
+   * Update webhook status
+   * @remarks if status is 'processing', retries will be incremented
    */
-  static async updateStatus(keys: WebhookKey, status: WebhookStatusValue) {
+  static async setStatus(id: Webhook['id'], status: WebhookStatusValue) {
     if (status === WebhookStatusValues.PROCESSING) {
-      return WebhookRepository.setProcessingStatus(keys)
+      return WebhookRepository.setStatusToProcessing(id)
     }
 
-    const input: Omit<UpdateCommandInput, 'TableName'> = {
-      Key: keys,
-      UpdateExpression: 'SET #Status = :StatusValue',
-      ExpressionAttributeNames: {
-        '#Status': 'status',
-      },
-      ExpressionAttributeValues: {
-        ':StatusValue': status,
-      },
-      ReturnValues: 'NONE',
-    }
+    const [error, response] = await to(
+      WebhookService.entities.statuses.update({ id }).set({ status }).go()
+    )
 
-    return WebhookRepository.update(input)
+    return { error, response }
   }
 
-  static async setProcessingStatus(keys: WebhookKey) {
-    const input: Omit<UpdateCommandInput, 'TableName'> = {
-      Key: keys,
-      UpdateExpression: 'SET #Status = :StatusValue, retries = retries + 1',
-      ExpressionAttributeNames: {
-        '#Status': 'status',
-      },
-      ExpressionAttributeValues: {
-        ':StatusValue': WebhookStatusValues.PROCESSING,
-      },
-      ReturnValues: 'NONE',
-    }
+  /**
+   * Set status to processing and increment retries
+   */
+  static async setStatusToProcessing(id: Webhook['id']) {
+    const [error, response] = await to(
+      WebhookService.entities.statuses
+        .update({ id })
+        .set({ status: 'processing' })
+        .add({ retries: 1 })
+        .go()
+    )
 
-    return WebhookRepository.update(input)
+    return { error, response }
   }
 }

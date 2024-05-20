@@ -6,10 +6,11 @@ export function StorageStack({ stack }: StackContext) {
     fields: {
       PK: 'string',
       SK: 'string',
+      id: 'string',
       payload: 'string',
-      created_at: 'string',
+      created: 'string',
       origin: 'string',
-      event_type: 'string',
+      type: 'string',
       status: 'string',
       retries: 'number',
     },
@@ -20,7 +21,12 @@ export function StorageStack({ stack }: StackContext) {
         function: {
           handler: 'packages/functions/src/process.handler',
         },
-        filters: [{ eventName: ['INSERT'] }],
+        filters: [
+          {
+            eventName: ['INSERT'],
+            dynamodb: { Keys: { SK: { S: ['WEBHOOK'] } } },
+          },
+        ],
       },
     },
   })

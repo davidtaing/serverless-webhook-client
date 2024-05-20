@@ -12,7 +12,7 @@ export async function doSomeWork(
 ): Promise<true | Error> {
   logger.info({ key }, 'Processing webhook')
 
-  const ERROR_RATE = 0.5 // arbitrary error rate
+  const ERROR_RATE = 1 // arbitrary error rate
   const BASE_DELAY_MS = 100
   const delay = BASE_DELAY_MS + Math.floor(Math.random() * 100)
 
@@ -22,16 +22,8 @@ export async function doSomeWork(
 
   // randomly throw an error
   if (Math.random() < ERROR_RATE) {
-    const error = new Error('failed to process webhook')
-    throw error
+    throw new Error('failed to process webhook')
   }
 
   return true
-}
-
-export async function updateWebhookStatus(
-  key: WebhookKey,
-  status: WebhookStatusValue
-): Promise<Error | null> {
-  return WebhookRepository.updateStatus(key, status)
 }
