@@ -1,14 +1,17 @@
 # Serverless Webhook Client
 
-## Why webhooks?
+## Why the topic of webhooks?
 
-I will always find webhooks interesting. These are some of things that you'll have to think about:
+I will always find webhooks interesting. It's a meaty problem-space and there's a lot to it.
+
+You build a mailbox (or a few) to receive messages, and you'll have to think about:
 
 - Persistence:
   - How can I ensure that webhooks are not lost?
+  - If they do get lost, how can we recieve another copy?
 - Security:
   - How do I know who sent this?
-  - How do I know that this has not been tampered with?
+  - How do I know that this has not been tampered with or altered in any way?
 - Failures:
   - How do I handle processing failures?
   - How can I retry or resume processing?
@@ -16,9 +19,25 @@ I will always find webhooks interesting. These are some of things that you'll ha
   - What if I receive more than one copy of a webhook event?
     - At the same time?
     - What about at different times?
-- Other:
+- Potential Race Conditions:
   - Does the order of webhooks matter?
-    - What race conditions could we see?
+
+# Built With
+
+### Langauges, Frameworks and Runtimes
+
+- Node
+- TypeScript
+- SST - framework used to scaffold resources on AWS via infrastructure as code
+- ElectroDB - Single-Table design oriented framework for DynamoDB (WIP)
+
+### Infrastructure
+
+- API Gateway
+- Lambda - Serverless compute (functions as a service)
+- DynamoDB - NoSQL Database
+- DynamoDB streams - Publishing events such as a Record Inserted event. We will use this to trigger the initial run.
+- SQS - queues containing webhooks that have not been processed successfully. We will use this to trigger re-runs.
 
 # Architecture
 
