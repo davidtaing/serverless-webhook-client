@@ -88,6 +88,7 @@ Also, I like the thesis of "Storage is cheap, compute isn't". I think this has s
 const webhook = {
   PK: 'WH#57f08d25-a733-453a-be49-8caf04df5169',
   SK: 'WEBHOOK',
+  id: '57f08d25-a733-453a-be49-8caf04df5169',
   origin: 'stripe',
   type: 'payment_intent.succeeded',
   created: '2024-05-19T05:27:28+00:00',
@@ -97,6 +98,7 @@ const webhook = {
 const webhookStatus = {
   PK: 'WH#57f08d25-a733-453a-be49-8caf04df5169',
   SK: 'STATUS',
+  id: '57f08d25-a733-453a-be49-8caf04df5169'
   status: 'completed',
   retries: 1,
 }
