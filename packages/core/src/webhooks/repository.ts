@@ -1,7 +1,6 @@
-import to from 'await-to-js'
-
 import { Webhook, WebhookStatusValue, WebhookStatusValues } from './types'
 import { WebhookService } from './models'
+import { to } from '../utils'
 
 export class WebhookRepository {
   /**
@@ -11,7 +10,7 @@ export class WebhookRepository {
    * @remarks should consume 4 WCU
    */
   static async capture(webhook: Webhook) {
-    const [error, response] = await to(
+    return to(
       WebhookService.transaction
         .write(({ webhooks, statuses }) => [
           webhooks.put(webhook).commit(),
@@ -25,16 +24,10 @@ export class WebhookRepository {
         ])
         .go()
     )
-
-    return { error, response }
   }
 
   static async getStatus(id: Webhook['id']) {
-    const [error, response] = await to(
-      WebhookService.entities.statuses.get({ id }).go()
-    )
-
-    return { error, response }
+    return await to(WebhookService.entities.statuses.get({ id }).go())
   }
 
   /**
@@ -46,25 +39,21 @@ export class WebhookRepository {
       return WebhookRepository.setStatusToProcessing(id)
     }
 
-    const [error, response] = await to(
+    return to(
       WebhookService.entities.statuses.update({ id }).set({ status }).go()
     )
-
-    return { error, response }
   }
 
   /**
    * Set status to processing and increment retries
    */
   static async setStatusToProcessing(id: Webhook['id']) {
-    const [error, response] = await to(
+    return to(
       WebhookService.entities.statuses
         .update({ id })
         .set({ status: 'processing' })
         .add({ retries: 1 })
         .go()
     )
-
-    return { error, response }
   }
 }
