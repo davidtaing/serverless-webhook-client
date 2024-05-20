@@ -1,3 +1,11 @@
+/**
+ * This file contains the implementation of various tasks involved in processing webhooks.
+ * It includes functions for mapping stream records, validating webhook status, setting webhook status to processing,
+ * processing the webhook, setting the final status of the webhook, sending failures to SQS, logging results,
+ * and building the Lambda response.
+ *
+ * @module tasks
+ */
 import { logger } from '../../logger'
 import { WebhookRepository } from '../repository'
 import {
@@ -22,8 +30,14 @@ import { to } from '../../utils'
 export type ProcessPipelineInput = {
   key: WebhookKey
   item: Webhook
+  /**
+   * This will be used to flag partial batch failures in the lambda response.
+   * For DynamoDB streams, this will be the eventID.
+   * And for SQS messages, this will be the messageID.
+   **/
   batchItemIdentifier: string
   status: WebhookProcessingStatus
+  /** the raw DynamoDB stream event. */
   rawStreamRecord: string
 }
 
