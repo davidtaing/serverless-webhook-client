@@ -112,9 +112,10 @@ Note: schema is subject to change.
 
 <!-- generate a 4 column table with the names Access Patterns, Target, Parameters & Notes -->
 
-| Access Patterns             | Target     | Parameters   | Notes                                                                          |
-| --------------------------- | ---------- | ------------ | ------------------------------------------------------------------------------ |
-| Capture Webhook             | Main Table | - Webhook ID | Transaction with Two Operations: <br>- Put Webhook <br>- Put Webhook Status    |
-| Get Webhook Status          | Main Table | - Webhook ID | Get Operation                                                                  |
-| Set Webhook Status          | Main Table | - Webhook ID | Update Operation                                                               |
-| Set Webhook to `processing` | Main Table | - Webhook ID | Update Operation <br> - set `status` to `processing` <br>- increment `retries` |
+| Access Patterns             | Target     | Parameters   | Notes                                                                                   |
+| --------------------------- | ---------- | ------------ | --------------------------------------------------------------------------------------- |
+| Get Webhook                 | Main Table | - Webhook ID | Get Operation - Given the immutability, we can always use 'eventually' consistent reads |
+| Capture Webhook             | Main Table | - Webhook ID | Transaction with Two Operations: <br>- Put Webhook <br>- Put Webhook Status             |
+| Get Webhook Status          | Main Table | - Webhook ID | Get Operation                                                                           |
+| Set Webhook Status          | Main Table | - Webhook ID | Update Operation                                                                        |
+| Set Webhook to `processing` | Main Table | - Webhook ID | Update Operation <br> - set `status` to `processing` <br>- increment `retries`          |

@@ -3,6 +3,20 @@ import { WebhookService } from './models'
 import { to } from '../utils'
 
 export class WebhookRepository {
+  static async get(id: Webhook['id']) {
+    return to(
+      WebhookService.entities.webhooks
+        .get({ id })
+        /**
+         * Given the immutability of this data, we can safely use eventually-consistent
+         * reads which are priced at 1 / 2 RCUs per 4KB.
+         *
+         * This value defaults to false, but we're being explicit here to comment on the choice.
+         */
+        .go({ params: { ConsistentRead: false } })
+    )
+  }
+
   /**
    * Writes immutable data to a Webhook entity record, and mutable data to a
    * WebhookStatus entity record.
@@ -27,7 +41,20 @@ export class WebhookRepository {
   }
 
   static async getStatus(id: Webhook['id']) {
-    return await to(WebhookService.entities.statuses.get({ id }).go())
+    return await to(
+      WebhookService.entities.statuses
+        .get({ id })
+        /**
+         * Consistent reads are required here to ensure that we're not processing
+         * a webhook when we don't need to.
+         *
+         * This allows us to handle situations like handling duplicates, or when an
+         * event has already been processed, or exceeded the maximum number of retries.
+         *
+         * This would be priced at 1 RCU per 4KB.
+         */
+        .go({ params: { ConsistentRead: true } })
+    )
   }
 
   /**

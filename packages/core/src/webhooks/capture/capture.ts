@@ -13,7 +13,7 @@ import { WebhookRepository } from '../repository'
 export const validateDuplicate = async (
   key: WebhookKey
 ): Promise<APIGatewayProxyStructuredResultV2 | null> => {
-  const { error, response } = await WebhookRepository.getByKey(key)
+  const { error, response } = await WebhookRepository.get(key.PK)
 
   if (error) {
     return {
@@ -22,7 +22,7 @@ export const validateDuplicate = async (
     }
   }
 
-  if (response?.Item) {
+  if (response?.data) {
     return {
       statusCode: 200,
       body: JSON.stringify({
