@@ -1,5 +1,5 @@
 import { WebhookOrigin } from '../types'
-import { ExtractCompositeKeys, Mappers, WebhookAdapterFunction } from './types'
+import { Mappers, WebhookAdapterFunction } from './types'
 
 /**
  * Determines the origin of the webhook based on the URI path.
@@ -19,9 +19,15 @@ export function determineOrigin(
   }
 }
 
-export const webhookKeyMappers: ExtractCompositeKeys = {
-  bigcommerce: payload => `WH#${payload.hash}`,
-  stripe: payload => `WH#${payload.id}`,
+/**
+ * Collection of functions that extract the id from the webhook payload,
+ * for each webhook provider
+ */
+export const webhookKeyMappers: {
+  [key in WebhookOrigin]: (payload: any) => string
+} = {
+  bigcommerce: payload => payload.hash,
+  stripe: payload => payload.id,
 } as const
 
 /**
@@ -31,7 +37,7 @@ export const webhookKeyMappers: ExtractCompositeKeys = {
  */
 export const bigcommerceWebhookMapper: WebhookAdapterFunction = payload => {
   return {
-    id: payload.hash,
+    id: webhookKeyMappers['bigcommerce'](payload),
     origin: 'bigcommerce',
     type: payload.scope,
     created: new Date(payload.created_at * 1000).toISOString(),
@@ -46,7 +52,7 @@ export const bigcommerceWebhookMapper: WebhookAdapterFunction = payload => {
  */
 export const stripeWebhookMapper: WebhookAdapterFunction = (payload: any) => {
   return {
-    id: payload.id,
+    id: webhookKeyMappers['stripe'](payload),
     origin: 'stripe',
     type: payload.type,
     created: new Date(payload.created_at * 1000).toISOString(),
