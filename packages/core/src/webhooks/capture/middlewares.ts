@@ -32,7 +32,7 @@ export const validateWebhookOrigin = (): APIGatewayProxyV2Middleware => {
 
     if (!webhookOrigin) {
       return {
-        statusCode: 500,
+        statusCode: 400,
         body: JSON.stringify({
           error: 'Webhook Not Supported: origin not supported',
         }),
