@@ -38,6 +38,9 @@ importers:
       '@aws-sdk/util-dynamodb':
         specifier: ^3.577.0
         version: 3.577.0(@aws-sdk/client-dynamodb@3.576.0)
+      '@middy/core':
+        specifier: ^5.3.5
+        version: 5.3.5
       '@smithy/node-http-handler':
         specifier: ^3.0.0
         version: 3.0.0
@@ -81,6 +84,12 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.576.0
         version: 3.576.0(@aws-sdk/client-dynamodb@3.576.0)
+      '@middy/core':
+        specifier: ^5.3.5
+        version: 5.3.5
+      '@middy/input-output-logger':
+        specifier: ^5.3.5
+        version: 5.3.5
       await-to-js:
         specifier: ^3.0.0
         version: 3.0.0
@@ -2447,6 +2456,13 @@ packages:
     resolution: {integrity: sha512-JR+MuD4awAXvutu7HArephXfZm09GPTaSAQUqNcJB5+ZENRm4kV+L6vJL6Tn1xHjCcHksO+HAqj3gYtm5K94vA==}
     dev: true
 
+  /@datastream/core@0.0.35:
+    resolution: {integrity: sha512-jmKFcDTYqtDy8DHPahaheg3MlLBiQboYX4jYX8oxE1tO5x7cfLl5M6bqR/o46RCEFZ3M9yMVfEEh0hy5raErEw==}
+    engines: {node: '>=18'}
+    dependencies:
+      cloneable-readable: 3.0.0
+    dev: false
+
   /@envelop/core@3.0.6:
     resolution: {integrity: sha512-06t1xCPXq6QFN7W1JUEf68aCwYN0OUDNAIoJe7bAqhaoa2vn7NCcuX1VHkJ/OWpmElUgCsRO6RiBbIru1in0Ig==}
     dependencies:
@@ -3026,6 +3042,18 @@ packages:
     resolution: {integrity: sha512-9I2Zn6+NJLfaGoz9jN3lpwDgAYvfGeNYdbAIjJOqzs4Tpc+VU3Jqq4IofSUBKajiDS8k9fZIg18/z13mpk1bsA==}
     engines: {node: '>=8'}
     dev: true
+
+  /@middy/core@5.3.5:
+    resolution: {integrity: sha512-kMjnRPC30KA52fR/Vb9sBOqYNCvOPwo0hKMtKZ9QfjB+hnaSg0y+hTTX6EArJm+6iFd+0Y6tEwT//qXpCvhTMQ==}
+    engines: {node: '>=18'}
+    dependencies:
+      '@datastream/core': 0.0.35
+    dev: false
+
+  /@middy/input-output-logger@5.3.5:
+    resolution: {integrity: sha512-MG9k06gNssjqN/fMp42lNytBvStqp9i0w0aGADMuX+h+q3nFoozfcagq1OI8n774C/JX4acjNWvinKBV6bbLJw==}
+    engines: {node: '>=18'}
+    dev: false
 
   /@peculiar/asn1-schema@2.3.8:
     resolution: {integrity: sha512-ULB1XqHKx1WBU/tTFIA+uARuRoBVZ4pNdOA878RDrRbBfBGcSzi5HBkdScC6ZbHn8z7L8gmKCgPC1LHRrP46tA==}
@@ -4538,6 +4566,12 @@ packages:
     resolution: {integrity: sha512-JQHZ2QMW6l3aH/j6xCqQThY/9OH4D/9ls34cgkUBiEeocRTU04tHfKPBsUK1PqZCUQM7GiA0IIXJSuXHI64Kbg==}
     engines: {node: '>=0.8'}
     dev: true
+
+  /cloneable-readable@3.0.0:
+    resolution: {integrity: sha512-Lkfd9IRx1nfiBr7UHNxJSl/x7DOeUfYmxzCkxYJC2tyc/9vKgV75msgLGurGQsak/NvJDHMWcshzEXRlxfvhqg==}
+    dependencies:
+      readable-stream: 4.5.2
+    dev: false
 
   /code-excerpt@4.0.0:
     resolution: {integrity: sha512-xxodCmBen3iy2i0WtAK8FlFNrRzjUqjRsMfho58xT/wvZU1YTM3fCnRjcy1gJPMepaRlgm/0e6w8SpWHpn3/cA==}

@@ -17,6 +17,7 @@
     "@aws-sdk/client-sqs": "^3.577.0",
     "@aws-sdk/lib-dynamodb": "^3.576.0",
     "@aws-sdk/util-dynamodb": "^3.577.0",
+    "@middy/core": "^5.3.5",
     "@smithy/node-http-handler": "^3.0.0",
     "await-to-js": "^3.0.0",
     "aws-lambda": "^1.0.7",

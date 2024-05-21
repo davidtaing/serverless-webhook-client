@@ -17,7 +17,7 @@ export function ApiStack({ stack }: StackContext) {
           handler: 'packages/functions/src/capture-webhooks.handler',
           environment: {
             WEBHOOK_ORIGIN: 'bigcommerce',
-            DISABLE_WEBHOOK_SIGNATURE_VALIDATION: 'true',
+            ENABLE_WEBHOOK_SIGNATURE_VALIDATION: 'true',
           },
         },
       },

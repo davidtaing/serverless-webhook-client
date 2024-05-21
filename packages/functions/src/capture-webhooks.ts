@@ -1,21 +1,20 @@
-import crypto from 'crypto'
-import { APIGatewayProxyHandlerV2 } from 'aws-lambda'
+import { APIGatewayProxyEventV2, Context } from 'aws-lambda'
+import middy from '@middy/core'
+import inputOutputLogger from '@middy/input-output-logger'
 
 import {
   capture,
   extractCompositeKeys,
   validateDuplicate,
 } from '@serverless-webhook-client/core/webhooks/capture'
+import { verifySignatureMiddleware } from '@serverless-webhook-client/core/webhooks/capture/middlewares'
+import { logger } from '@serverless-webhook-client/core/logger'
 
-const secret = 'xPpcHHoAOM'
 const WEBHOOK_ORIGIN =
   process.env.WEBHOOK_ORIGIN === 'bigcommerce' ||
   process.env.WEBHOOK_ORIGIN === 'stripe'
     ? process.env.WEBHOOK_ORIGIN
     : null
-
-const DISABLE_WEBHOOK_SIGNATURE_VALIDATION =
-  process.env.DISABLE_WEBHOOK_SIGNATURE_VALIDATION === 'true'
 
 /**
  * Lambda function entry point. Performs validation on the webhook before capturing
@@ -25,7 +24,10 @@ const DISABLE_WEBHOOK_SIGNATURE_VALIDATION =
  * @param event - The API Gateway event.
  * @returns The API Gateway response.
  */
-export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
+export const lambdaHandler = async (
+  event: APIGatewayProxyEventV2,
+  context: Context
+) => {
   if (!WEBHOOK_ORIGIN) {
     return {
       statusCode: 500,
@@ -40,15 +42,6 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
       statusCode: 400,
       body: JSON.stringify({ error: true }),
     }
-  }
-
-  if (!DISABLE_WEBHOOK_SIGNATURE_VALIDATION) {
-    const validationError = validateSignature(
-      event.body,
-      event.headers['signature']
-    )
-
-    if (validationError) return validationError
   }
 
   const payload = JSON.parse(event.body)
@@ -67,30 +60,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
   return capture(payload, WEBHOOK_ORIGIN)
 }
 
-function validateSignature(rawBody?: string, signature?: string) {
-  if (!rawBody || !signature) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Invalid Webhook Signature' }),
-    }
-  }
-
-  const comparisonSignature = createSignatureToken(rawBody, secret)
-
-  if (signature !== comparisonSignature) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Invalid Webhook Signature' }),
-    }
-  }
-}
-
-function createSignatureToken(payload: string, secret: string) {
-  const result = crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('base64url')
-    .toString()
-
-  return result
-}
+export const handler = middy()
+  .use(
+    inputOutputLogger({
+      logger: (message: any) => logger.info(message),
+      awsContext: true,
+      omitPaths: ['event.headers'],
+    })
+  )
+  .use(verifySignatureMiddleware())
+  .handler(lambdaHandler)
