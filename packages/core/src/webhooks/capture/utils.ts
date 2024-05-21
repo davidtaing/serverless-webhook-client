@@ -1,4 +1,4 @@
-import { Webhook, WebhookOrigin } from '../types'
+import { WebhookOrigin } from '../types'
 import { ExtractCompositeKeys, Mappers, WebhookAdapterFunction } from './types'
 
 /**

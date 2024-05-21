@@ -2,19 +2,14 @@ import { APIGatewayProxyEventV2, Context } from 'aws-lambda'
 import middy from '@middy/core'
 import inputOutputLogger from '@middy/input-output-logger'
 
+import { capture } from '@serverless-webhook-client/core/webhooks/capture'
 import {
-  capture,
-  webhookKeyMappers,
-  validateDuplicate,
-} from '@serverless-webhook-client/core/webhooks/capture'
-import { verifySignatureMiddleware } from '@serverless-webhook-client/core/webhooks/capture/middlewares'
+  rejectDuplicateWebhooks,
+  validateWebhookOrigin,
+  validateWebhookSignature,
+} from '@serverless-webhook-client/core/webhooks/capture/middlewares'
 import { logger } from '@serverless-webhook-client/core/logger'
-
-const WEBHOOK_ORIGIN =
-  process.env.WEBHOOK_ORIGIN === 'bigcommerce' ||
-  process.env.WEBHOOK_ORIGIN === 'stripe'
-    ? process.env.WEBHOOK_ORIGIN
-    : null
+import { WebhookOrigin } from '@serverless-webhook-client/core/webhooks/types'
 
 /**
  * Lambda function entry point. Performs validation on the webhook before capturing
@@ -28,30 +23,12 @@ export const lambdaHandler = async (
   event: APIGatewayProxyEventV2,
   context: Context
 ) => {
-  const { body: payload } = context as Context & {
-    rawBody: string
-    signature: string
+  const { body: payload, webhookOrigin } = context as Context & {
+    webhookOrigin: WebhookOrigin
     body: any
   }
 
-  if (!WEBHOOK_ORIGIN) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: 'Webhook Not Supported: origin not supported',
-      }),
-    }
-  }
-
-  const key = webhookKeyMappers[WEBHOOK_ORIGIN](payload)
-  const invalidStatus = await validateDuplicate(key)
-
-  // early exit on duplicates or Dynamo errors
-  if (invalidStatus !== null) {
-    return invalidStatus
-  }
-
-  return capture(payload, WEBHOOK_ORIGIN)
+  return capture(payload, webhookOrigin)
 }
 
 export const handler = middy()
@@ -62,5 +39,7 @@ export const handler = middy()
       omitPaths: ['event.headers'],
     })
   )
-  .use(verifySignatureMiddleware())
+  .use(validateWebhookOrigin())
+  .use(validateWebhookSignature())
+  .use(rejectDuplicateWebhooks())
   .handler(lambdaHandler)
