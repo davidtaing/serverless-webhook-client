@@ -4,7 +4,7 @@ import inputOutputLogger from '@middy/input-output-logger'
 
 import {
   capture,
-  extractCompositeKeys,
+  webhookKeyMappers,
   validateDuplicate,
 } from '@serverless-webhook-client/core/webhooks/capture'
 import { verifySignatureMiddleware } from '@serverless-webhook-client/core/webhooks/capture/middlewares'
@@ -28,6 +28,12 @@ export const lambdaHandler = async (
   event: APIGatewayProxyEventV2,
   context: Context
 ) => {
+  const { body: payload } = context as Context & {
+    rawBody: string
+    signature: string
+    body: any
+  }
+
   if (!WEBHOOK_ORIGIN) {
     return {
       statusCode: 500,
@@ -37,19 +43,7 @@ export const lambdaHandler = async (
     }
   }
 
-  if (!event.body) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: true }),
-    }
-  }
-
-  const payload = JSON.parse(event.body)
-
-  // Note:
-  // We should add handle validation of the payload and verify sender here.
-  // But since this is a proof of concept, we'll skip that for now.
-  const key = extractCompositeKeys[WEBHOOK_ORIGIN](payload)
+  const key = webhookKeyMappers[WEBHOOK_ORIGIN](payload)
   const invalidStatus = await validateDuplicate(key)
 
   // early exit on duplicates or Dynamo errors

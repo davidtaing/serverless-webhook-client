@@ -7,11 +7,6 @@ const secret = 'xPpcHHoAOM'
 const ENABLE_WEBHOOK_SIGNATURE_VALIDATION =
   process.env.ENABLE_WEBHOOK_SIGNATURE_VALIDATION === 'true'
 
-logger.debug(
-  { value: ENABLE_WEBHOOK_SIGNATURE_VALIDATION },
-  'ENABLE_WEBHOOK_SIGNATURE_VALIDATION'
-)
-
 export type APIGatewayProxyV2Middleware = middy.MiddlewareObj<
   APIGatewayProxyEventV2,
   APIGatewayProxyResultV2
@@ -49,6 +44,12 @@ export const verifySignatureMiddleware = (): APIGatewayProxyV2Middleware => {
         body: JSON.stringify({ error: 'Invalid Webhook Signature' }),
       }
     }
+
+    Object.assign(request.context, {
+      rawBody,
+      signature,
+      body: JSON.parse(rawBody),
+    })
   }
 
   return {

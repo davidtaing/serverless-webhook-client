@@ -5,7 +5,7 @@ import { Webhook, WebhookKey, WebhookOrigin } from '../types'
  * webhook payload.
  */
 export type ExtractCompositeKeys = {
-  [key in WebhookOrigin]: (payload: any) => WebhookKey
+  [key in WebhookOrigin]: (payload: any) => string
 }
 
 export type WebhookAdapterFunction = (payload: any) => Webhook

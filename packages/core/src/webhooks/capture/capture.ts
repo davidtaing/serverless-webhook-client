@@ -11,9 +11,9 @@ import { WebhookRepository } from '../repository'
  * object indicating a dynamo error, duplicate record or operator required status.
  */
 export const validateDuplicate = async (
-  key: WebhookKey
+  id: string
 ): Promise<APIGatewayProxyStructuredResultV2 | null> => {
-  const { error, response } = await WebhookRepository.get(key.PK)
+  const { error, response } = await WebhookRepository.get(id)
 
   if (error) {
     return {

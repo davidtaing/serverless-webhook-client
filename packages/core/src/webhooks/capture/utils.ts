@@ -19,15 +19,9 @@ export function determineOrigin(
   }
 }
 
-export const extractCompositeKeys: ExtractCompositeKeys = {
-  bigcommerce: payload => ({
-    PK: `WH#${payload.hash}`,
-    SK: `WEBHOOK`,
-  }),
-  stripe: payload => ({
-    PK: `WH#${payload.id}`,
-    SK: `WEBHOOK`,
-  }),
+export const webhookKeyMappers: ExtractCompositeKeys = {
+  bigcommerce: payload => `WH#${payload.hash}`,
+  stripe: payload => `WH#${payload.id}`,
 } as const
 
 /**
