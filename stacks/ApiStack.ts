@@ -12,8 +12,15 @@ export function ApiStack({ stack }: StackContext) {
       },
     },
     routes: {
-      'POST /webhooks/bigcommerce':
-        'packages/functions/src/capture-webhooks.handler',
+      'POST /webhooks/bigcommerce': {
+        function: {
+          handler: 'packages/functions/src/capture-webhooks.handler',
+          environment: {
+            WEBHOOK_ORIGIN: 'bigcommerce',
+            DISABLE_WEBHOOK_SIGNATURE_VALIDATION: 'true',
+          },
+        },
+      },
     },
   })
 
