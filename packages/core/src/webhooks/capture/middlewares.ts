@@ -22,6 +22,13 @@ export type APIGatewayProxyV2MiddlewareFn = middy.MiddlewareFn<
   APIGatewayProxyResultV2
 >
 
+export type CustomCaptureContext = Context & {
+  webhookOrigin: WebhookOrigin
+  rawBody: string
+  signature: string
+  body: any
+}
+
 export const validateWebhookOrigin = (): APIGatewayProxyV2Middleware => {
   const before: APIGatewayProxyV2MiddlewareFn = async request => {
     const webhookOrigin =
@@ -92,10 +99,8 @@ export const validateWebhookSignature = (): APIGatewayProxyV2Middleware => {
 
 export const rejectDuplicateWebhooks = (): APIGatewayProxyV2Middleware => {
   const before: APIGatewayProxyV2MiddlewareFn = async request => {
-    const { webhookOrigin, body: payload } = request.context as Context & {
-      webhookOrigin: WebhookOrigin
-      body: any
-    }
+    const { webhookOrigin, body: payload } =
+      request.context as CustomCaptureContext
 
     const key = webhookKeyMappers[webhookOrigin](payload)
 

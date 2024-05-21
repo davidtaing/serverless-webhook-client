@@ -4,6 +4,7 @@ import inputOutputLogger from '@middy/input-output-logger'
 
 import { capture } from '@serverless-webhook-client/core/webhooks/capture'
 import {
+  CustomCaptureContext,
   rejectDuplicateWebhooks,
   validateWebhookOrigin,
   validateWebhookSignature,
@@ -23,11 +24,7 @@ export const lambdaHandler = async (
   event: APIGatewayProxyEventV2,
   context: Context
 ) => {
-  const { body: payload, webhookOrigin } = context as Context & {
-    webhookOrigin: WebhookOrigin
-    body: any
-  }
-
+  const { body: payload, webhookOrigin } = context as CustomCaptureContext
   return capture(payload, webhookOrigin)
 }
 
