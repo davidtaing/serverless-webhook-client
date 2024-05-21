@@ -9,7 +9,10 @@
     "deploy": "sst deploy",
     "remove": "sst remove",
     "console": "sst console",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "send-webhook": "cd experiments/send-webhook && ./build/send-webhook && cd ../..",
+    "send-webhook-dev": "cd experiments/send-webhook && go run main.go && cd ../..",
+    "build-send-webhook": "cd experiments/send-webhook && go build -o build/send-webhook main.go && cd ../.."
   },
   "devDependencies": {
     "sst": "^2.41.5",
