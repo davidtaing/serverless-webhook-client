@@ -12,13 +12,19 @@ export function ApiStack({ stack }: StackContext) {
       },
     },
     routes: {
-      'POST /webhooks/bigcommerce': {
+      'POST /api/webhooks/bigcommerce': {
         function: {
           handler: 'packages/functions/src/capture-webhooks.handler',
           environment: {
             WEBHOOK_ORIGIN: 'bigcommerce',
             ENABLE_WEBHOOK_SIGNATURE_VALIDATION: 'true',
           },
+        },
+      },
+      'POST /demo/send-webhook': {
+        function: {
+          runtime: 'go',
+          handler: 'packages/other/golang/send-webhook.go',
         },
       },
     },

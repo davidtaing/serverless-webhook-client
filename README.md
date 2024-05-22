@@ -31,6 +31,8 @@ You build a mailbox (or a few) to receive messages, and you'll have to think abo
 - SST - framework used to scaffold resources on AWS via infrastructure as code
 - ElectroDB - Single-Table design oriented framework for DynamoDB (WIP)
 
+- Golang for our send-webhook lambda function which is used to demo this application.
+
 ### Infrastructure
 
 - API Gateway
@@ -45,10 +47,11 @@ You build a mailbox (or a few) to receive messages, and you'll have to think abo
 
 # API
 
-| Method | Target                     | Notes                                              |
-| ------ | -------------------------- | -------------------------------------------------- |
-| `POST` | `/api/webhooks/bigcommece` | Capture webhooks from BigCommerce                  |
-| `POST` | `/api/webhooks/stripe`     | Capture webhooks from Stripe (not yet implemented) |
+| Method | Target                     | Notes                                                         |
+| ------ | -------------------------- | ------------------------------------------------------------- |
+| `POST` | `/api/webhooks/bigcommece` | Capture webhooks from BigCommerce                             |
+| `POST` | `/api/webhooks/stripe`     | Capture webhooks from Stripe (not yet implemented)            |
+| `POST` | `/demo/send-webhook`       | Generates a BigCommerce Webhook event and sends it to our API |
 
 # SQS Queues
 
@@ -65,7 +68,15 @@ You build a mailbox (or a few) to receive messages, and you'll have to think abo
 | `dynamo-process-webhooks` | DynamoDB Stream Insert Event           | Process webhook (first run)              |
 | `sqs-process-webhooks`    | SQS Message from Failed Webhooks Queue | Process webhook (failed runs)            |
 
-Note: Names have yet to be updated
+These three lambdas build out the core functionality of the project.
+
+## Other Lambda Functions
+
+| Name            | Trigger           | Description                                                                                                                                      |
+| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `send-webhooks` | API Gateway Event | Creates and sends a BigCommerce webhook to our API. Built with Golang since different languages may marshall / unmarshall JSON data differently. |
+
+These lambdas will are used to demo our features.
 
 # DynamoDB
 

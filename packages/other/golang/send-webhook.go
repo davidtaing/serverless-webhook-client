@@ -30,12 +30,16 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/oklog/ulid/v2"
 )
 
 const (
-	apiURL = "https://4sm9afiph5.execute-api.us-east-1.amazonaws.com/webhooks/bigcommerce"
-	secret = "xPpcHHoAOM"
+	hostURL  = "https://4sm9afiph5.execute-api.us-east-1.amazonaws.com"
+	endpoint = "/webhooks/bigcommerce"
+	apiURL   = hostURL + endpoint
+	secret   = "xPpcHHoAOM"
 )
 
 var (
@@ -44,16 +48,16 @@ var (
 	logger       = slog.New(handler)
 )
 
-type Payload struct {
+type payload struct {
 	Scope     string `json:"scope"`
 	StoreID   string `json:"store_id"`
-	Data      Data   `json:"data"`
+	Data      data   `json:"data"`
 	Hash      string `json:"hash"`
 	CreatedAt int64  `json:"created_at"`
 	Producer  string `json:"producer"`
 }
 
-type Data struct {
+type data struct {
 	Type string `json:"type"`
 	ID   int    `json:"id"`
 }
@@ -68,22 +72,23 @@ func createSignatureToken(payload []byte, secretKey string) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(hash.Sum(nil)), nil
 }
 
-func main() {
+func createAndSendWebhook() (string, error) {
 	programLevel.Set(slog.LevelDebug)
 
-	payload := Payload{
+	payload := payload{
 		Scope:     "store/order/created",
 		StoreID:   "1025646",
-		Data:      Data{Type: "order", ID: 250},
+		Data:      data{Type: "order", ID: 250},
 		Hash:      ulid.Make().String(),
 		CreatedAt: 1561479335,
 		Producer:  "stores/{store_hash}",
 	}
 
-	buffer, error := json.Marshal(payload)
-	if error != nil {
-		fmt.Println("Error marshalling payload:", error)
-		return
+	buffer, err := json.Marshal(payload)
+	if err != nil {
+		logger.Error("Failed to marshall payload", "error", err)
+		message := fmt.Sprintf("Error marshalling payload: %v", err)
+		return message, err
 	}
 
 	logger.Debug("Webhook Payload", "payload", payload)
@@ -93,8 +98,9 @@ func main() {
 
 	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(buffer))
 	if err != nil {
-		fmt.Println("Error creating request:", err)
-		return
+		logger.Error("Error creating request", "error", err)
+		message := fmt.Sprintf("Error creating request: %v", err)
+		return message, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -103,16 +109,40 @@ func main() {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Error sending request:", err)
-		return
+		logger.Error("Error sending request to API", "endpoint", endpoint, "error", err)
+		message := fmt.Sprintf("Error sending request: %v", err)
+		return message, err
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println("API request failed with status:", resp.StatusCode)
-		return
+		logger.Error("API request failed", "status", resp.StatusCode)
+		message := fmt.Sprintf("API request failed with status: %v", resp.StatusCode)
+		return message, err
 	}
 
 	logger.Info("Sent Webhook to API", "URL", apiURL, "status", resp.StatusCode)
 
+	return fmt.Sprintf("Webhook sent to %s", apiURL), nil
+}
+
+func Handler(request events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
+	message, err := createAndSendWebhook()
+
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			Body:       message,
+			StatusCode: 500,
+		}, nil
+	}
+
+	return events.APIGatewayProxyResponse{
+		Body:       message,
+		StatusCode: 200,
+	}, nil
+}
+
+func main() {
+	lambda.Start(Handler)
 }
